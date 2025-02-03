@@ -4,11 +4,14 @@
         remote_user: root
         vars:
             GTP5G_DIR_INSTALL : "/root/gtp5g"
-            GTP5G_BRANCH_VERSION : "v0.8.3" 
+            GTP5G_BRANCH_VERSION : "v0.9.3" 
             FREE5GC_DIR_INSTALL : "/root/go/src/free5gc"
             WEB_CONSOLE_FRONTEND_DIR : "/root/go/src/free5gc/webconsole/frontend"
             WEB_CONSOLE_BASE_DIR : "/root/go/src/free5gc/webconsole"
+            FRONT_END_BASE_DIR : "/root/go/src/free5gc/webconsole/frontend"
             NFS_DIR_CONFIG : "/root/go/src/free5gc/config"
+            NEF_DIR : "/root/go/src/free5gc/NFs/nef"
+            CHF_DIR : "/root/go/src/free5gc/NFs/chf"
             UPF_DIR : "/root/go/src/free5gc/NFs/upf"
             NRF_DIR : "/root/go/src/free5gc/NFs/nrf"
             UDR_DIR : "/root/go/src/free5gc/NFs/udr"
@@ -22,7 +25,7 @@
             GO_SRC_DIR : "/root/go/src"
             HOME_DIR: "/root"
             CLASSLESS_INTER_DOMAIN_ROUTING_IPV4_POOL_OF_UE : "60.60.0.0"
-            FREE5GC_GIT_CHECKOUT_URL_FREEGC_TAG_VERSION: "--recursive -b v3.3.0 -j `nproc` https://github.com/free5gc/free5gc.git"
+            FREE5GC_GIT_CHECKOUT_URL_FREEGC_TAG_VERSION: "--recursive -b v3.4.4 -j `nproc` https://github.com/free5gc/free5gc.git"
             LABORA_UE_NON3GPP_GIT_REPO: "https://github.com/LABORA-INF-UFG/UE-non3GPP.git"
             FREE5GC_CHECKOUT_FOLDER_NAME: "free5gc"
             PREDEFINED_IP_ADDRESS: "false"
@@ -30,6 +33,15 @@
             NRF_IP_ADDRESS: "127.0.0.10"
             MASCARA_REDE_DECIMAL: "19"
             NRF_PORT: "8000"
+            NEF_IP_ADDRESS: "127.0.0.5"
+            NEF_PORT: "8000"
+            CHF_IP_ADDRESS: "127.0.0.113"
+            CHF_PORT: "8000"
+            CHF_ABMF_DIAMETER_PORT: "3868"
+            CHF_RF_DIAMETER_PORT : "3869"
+            CHF_IP_BILLING_SERVER_FTP : "127.0.0.1"
+            CHF_BILLING_SERVER_LISTEN_PORT : "2021"
+            CHF_CGF_FTP_SERVER_LISTEN_PORT : "2022"
             UDR_IP_ADDRESS: "127.0.0.4"
             UDR_PORT: "8000"
             UDM_IP_ADDRESS: "127.0.0.3"
@@ -54,10 +66,13 @@
             MNC_1: "93"
             MCC_2: "123"
             MNC_2: "45"
+            WEB_SERVER_PORT : "5000"
+            BILLING_SERVER_ENABLE : "true"
             
         tasks:
 
             - set_fact:
+                CHF_IP_BILLING_SERVER_FTP: "{{ ansible_default_ipv4.address }}"
                 AMF_NGAP_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
                 SMF_N3_INTERFACE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
                 SMF_N4_INTERFACE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
@@ -106,7 +121,7 @@
               ignore_errors: true
 
             - name  : Git Clone GTP5
-              shell : git clone -b {{ GTP5G_BRANCH_VERSION   }} https://github.com/free5gc/gtp5g.git
+              shell : git clone --depth 1 --branch {{ GTP5G_BRANCH_VERSION   }} https://github.com/free5gc/gtp5g.git
               args:
                 chdir: "{{ HOME_DIR }}"
 
@@ -121,17 +136,18 @@
                 chdir: "{{ GTP5G_DIR_INSTALL }}"
               ignore_errors: true
 
-            - name  : Network Setting 1/4
-              shell : sudo sysctl -w net.ipv4.ip_forward=1
+              #Com a inclusão da UPF em Go não está clara a necessidade dos ajustes na interface de rede. Por hora vamos omitir os comandos
+#            - name  : Network Setting 1/4
+#              shell : sudo sysctl -w net.ipv4.ip_forward=1
               
-            - name  : Network Setting 2/4
-              shell : sudo iptables -t nat -A POSTROUTING -o {{ internet_network_interface }} -j MASQUERADE
+#            - name  : Network Setting 2/4
+#              shell : sudo iptables -t nat -A POSTROUTING -o {{ internet_network_interface }} -j MASQUERADE
 
-            - name  : Network Setting with set Maximum Segment Size into UPF out 3/4
-              shell : sudo iptables -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1400
+#            - name  : Network Setting with set Maximum Segment Size into UPF out 3/4
+#              shell : sudo iptables -A FORWARD -p tcp -m tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1400
 
-            - name  : Network Setting 4/4
-              shell : sudo systemctl stop ufw
+#            - name  : Network Setting 4/4
+#              shell : sudo systemctl stop ufw
 
             - name  : Remove Free5gc old dir if exist
               shell : rm -rf {{ FREE5GC_CHECKOUT_FOLDER_NAME }}
@@ -157,6 +173,39 @@
             - name  : Copy NRF cert's 2/2
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/nrf.key
 
+            - name  : Copy root.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/root.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/root.pem
+
+            - name  : Copy root.key to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/root.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/root.key
+            
+            - name  : Copy udr.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/udr.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/udr.pem
+
+            - name  : Copy udm.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/udm.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/udm.pem
+
+            - name  : Copy ausf.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/ausf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/ausf.pem
+
+            - name  : Copy nssf.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nssf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/nssf.pem
+
+            - name  : Copy amf.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/amf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/amf.pem
+
+            - name  : Copy pcf.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/pcf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/pcf.pem
+
+            - name  : Copy smf.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/smf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/smf.pem
+
+            - name  : Copy chf.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/chf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/chf.pem
+
+            - name  : Copy nef.pem to NRF cert's
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nef.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nrf/cert/nef.pem
+
             - name  : Build nrfcfg.yaml config file - inside NFs/nrf dir (debug mode)
               copy:
                 dest: "{{ NRF_DIR }}/config/nrfcfg.yaml"
@@ -173,9 +222,13 @@
                       registerIPv4: {{ NRF_IP_ADDRESS }} # IP used to serve NFs or register to another NRF
                       bindingIPv4: {{ NRF_IP_ADDRESS }}  # IP used to bind the service
                       port: {{ NRF_PORT }} # port used to bind the service
-                      tls: # the local path of TLS key
+                      cert: # the local path of TLS key
                         pem: cert/nrf.pem # NRF TLS Certificate
                         key: cert/nrf.key # NRF TLS Private key
+                      rootcert: # the local path of root CA certs
+                        pem: cert/root.pem
+                        key: cert/root.key
+                      oauth: true
                     DefaultPlmnId:
                       mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
                       mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
@@ -186,44 +239,149 @@
                   logger: # log output setting
                     enable: true # true or false
                     level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
-
+                    reportCaller: false # enable the caller report or not, value: true or false 
+               
             - name  : Remove NRF default config file - (run mode)
               shell: rm nrfcfg.yaml
               args:
                 chdir: "{{ NFS_DIR_CONFIG }}"
 
-            - name  : Build nrfcfg.yaml default config file - (run mode)
+            - name  : Copy NRF default config file - (run mode)
+              shell: cp {{ NRF_DIR }}/config/nrfcfg.yaml {{ NFS_DIR_CONFIG }}/nrfcfg.yaml
+
+            - name  : Create NEF config dir
+              shell : |
+                mkdir config
+                mkdir cert
+              args:
+                chdir: "{{ NEF_DIR }}"
+
+            - name  : Copy NEF cert's 1/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nef.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nef/cert/nef.pem
+
+            - name  : Copy NEF cert's 2/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nef.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nef/cert/nef.key
+
+            - name  : Copy NRF .pen to NEF cert's dir 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nef.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nef/cert/nrf.pem                
+
+            - name  : Build nefcfg.yaml config file
               copy:
-                dest: "{{ NFS_DIR_CONFIG }}/nrfcfg.yaml"
+                dest: "{{ NEF_DIR }}/config/nefcfg.yaml"
                 content: |
                   info:
-                    version: 1.0.2
-                    description: NRF initial local configuration
+                    version: 1.0.1
+                    description: NEF initial local configuration
 
                   configuration:
-                    MongoDBName: free5gc # database name in MongoDB
-                    MongoDBUrl: {{ MONGO_URL_CONNECTION }} # a valid URL of the mongodb
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ NRF_IP_ADDRESS }} # IP used to serve NFs or register to another NRF
-                      bindingIPv4: {{ NRF_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ NRF_PORT }} # port used to bind the service
+                    sbi:
+                      scheme: http # The protocol for sbi (http or https)
+                      registerIPv4: {{ NEF_IP_ADDRESS }} # IP used to register to NRF
+                      bindingIPv4: {{ NEF_IP_ADDRESS }} # IP used to bind the service
+                      port: {{ NEF_PORT }} # port used to bind the service
                       tls: # the local path of TLS key
-                        pem: cert/nrf.pem # NRF TLS Certificate
-                        key: cert/nrf.key # NRF TLS Private key
-                    DefaultPlmnId:
-                      mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                      mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                    serviceNameList: # the SBI services provided by this NRF, refer to TS 29.510
-                      - nnrf-nfm # Nnrf_NFManagement service
-                      - nnrf-disc # Nnrf_NFDiscovery service
+                        pem: cert/nef.pem # NEF TLS Certificate
+                        key: cert/nef.key # NEF TLS Private key
+                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # A valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
+                    serviceList: # the SBI services provided by this NEF
+                      - serviceName: nnef-pfdmanagement # Nnef_PFDManagement Service
+                      - serviceName: nnef-oam # OAM service
 
                   logger: # log output setting
                     enable: true # true or false
                     level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
                     reportCaller: false # enable the caller report or not, value: true or false
+
+            - name  : Remove NEF default config file - (run mode)
+              shell: rm nefcfg.yaml
+              args:
+                chdir: "{{ NFS_DIR_CONFIG }}"                  
               
+            - name  : Copy NEF default config file - (run mode)
+              shell: cp {{ NEF_DIR }}/config/nefcfg.yaml {{ NFS_DIR_CONFIG }}/nefcfg.yaml
+
+            - name  : Create CHF config dir
+              shell : |
+                mkdir config
+                mkdir cert
+              args:
+                chdir: "{{ CHF_DIR }}"
+
+            - name  : Copy CHF cert's 1/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/chf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/chf/cert/chf.pem
+
+            - name  : Copy CHF cert's 2/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/chf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/chf/cert/chf.key
+
+            - name  : Copy NRF .pen to CHF cert's dir 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/chf/cert/nrf.pem                
+
+            - name  : Build chfcfg.yaml config file
+              copy:
+                dest: "{{ CHF_DIR }}/config/chfcfg.yaml"
+                content: |
+                  info:
+                    version: 1.0.3
+                    description: CHF initial local configuration
+
+                  configuration:
+                    chfName: CHF # the name of this CHF
+                    sbi: # Service-based interface information
+                      scheme: http # the protocol for sbi (http or https)
+                      registerIPv4: {{ CHF_IP_ADDRESS }} # IP used to register to NRF
+                      bindingIPv4: {{ CHF_IP_ADDRESS }} # IP used to bind the service
+                      port: {{ CHF_PORT }} # port used to bind the service
+                      tls: # the local path of TLS key
+                        pem: cert/chf.pem # CHF TLS Certificate
+                        key: cert/chf.key # CHF TLS Private key
+                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
+                    serviceNameList: # the SBI services provided by this CHF, refer to TS 32.291
+                      - nchf-convergedcharging # Nchf_ConvergedCharging service
+                    mongodb: # the mongodb connected by this CHF
+                      name: free5gc # name of the mongodb
+                      url: {{ MONGO_URL_CONNECTION }} # a valid URL of the mongodb
+                    quotaValidityTime: 10000
+                    volumeLimit: 50000
+                    volumeLimitPDU: 10000
+                    volumeThresholdRate: 0.8
+                    cgf:
+                      enable: {{ BILLING_SERVER_ENABLE }}
+                      hostIPv4: {{ CHF_IP_BILLING_SERVER_FTP }} # billing server ftp server
+                      port: {{ CHF_BILLING_SERVER_LISTEN_PORT }} # billing server listen on port
+                      listenPort: {{ CHF_CGF_FTP_SERVER_LISTEN_PORT }} # cgf ftp server listen port
+                      tls:
+                        pem: cert/chf.pem
+                        key: cert/chf.key
+                      cdrFilePath: /tmp
+                    abmfDiameter:
+                      protocol: tcp
+                      hostIPv4: {{ CHF_IP_ADDRESS }}
+                      port: {{ CHF_ABMF_DIAMETER_PORT }}
+                      tls:
+                        pem: cert/chf.pem
+                        key: cert/chf.key
+                    rfDiameter:
+                      protocol: tcp
+                      hostIPv4: {{ CHF_IP_ADDRESS }}
+                      port: {{ CHF_RF_DIAMETER_PORT }}
+                      tls:
+                        pem: cert/chf.pem # CHF TLS Certificate
+                        key: cert/chf.key # CHF TLS Private key
+                  logger: # log output setting
+                    enable: true # true or false
+                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
+                    reportCaller: false # enable the caller report or not, value: true or false
+
+            - name  : Remove CHF default config file - (run mode)
+              shell: rm chfcfg.yaml
+              args:
+                chdir: "{{ NFS_DIR_CONFIG }}"                  
+              
+            - name  : Copy CHF default config file - (run mode)
+              shell: cp {{ CHF_DIR }}/config/chfcfg.yaml {{ NFS_DIR_CONFIG }}/chfcfg.yaml
+
             - name  : Create UDR config dir
               shell : |
                 mkdir config
@@ -231,18 +389,21 @@
               args:
                 chdir: "{{ UDR_DIR }}"
 
-            - name  : Copy UDR cert's 1/2
+            - name  : Copy UDR cert's 1/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/udr.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/udr/cert/udr.pem
 
-            - name  : Copy UDR cert's 2/2
+            - name  : Copy UDR cert's 2/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/udr.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/udr/cert/udr.key
+
+            - name  : Copy NRF .pen to UDR cert's dir 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/udr/cert/nrf.pem
 
             - name  : Build udrcfg.yaml config file
               copy:
                 dest: "{{ UDR_DIR }}/config/udrcfg.yaml"
                 content: |
                   info:
-                    version: 1.0.2
+                    version: 1.1.0
                     description: UDR initial local configuration
 
                   configuration:
@@ -250,18 +411,20 @@
                       scheme: http # the protocol for sbi (http or https)
                       registerIPv4: {{ UDR_IP_ADDRESS }} # IP used to register to NRF
                       bindingIPv4: {{ UDR_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ UDR_PORT }} # port used to bind the service
+                      port: 8000 # port used to bind the service
                       tls: # the local path of TLS key
                         pem: cert/udr.pem # UDR TLS Certificate
                         key: cert/udr.key # UDR TLS Private key
+                    dbConnectorType: mongodb 
                     mongodb:
                       name: free5gc # Database name in MongoDB
                       url: {{ MONGO_URL_CONNECTION }} # URL of MongoDB
                     nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
 
                   logger: # log output setting
                     enable: true # true or false
-                    level: trace # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
+                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
                     reportCaller: false # enable the caller report or not, value: true or false
 
             - name  : Remove UDR default config file - (run mode)
@@ -269,32 +432,8 @@
               args:
                 chdir: "{{ NFS_DIR_CONFIG }}"                  
               
-            - name  : Build udrcfg.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/udrcfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.2
-                    description: UDR initial local configuration
-
-                  configuration:
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ UDR_IP_ADDRESS }} # IP used to register to NRF
-                      bindingIPv4: {{ UDR_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ UDR_PORT }} # port used to bind the service
-                      tls: # the local path of TLS key
-                        pem: cert/udr.pem # UDR TLS Certificate
-                        key: cert/udr.key # UDR TLS Private key
-                    mongodb:
-                      name: free5gc # Database name in MongoDB
-                      url: {{ MONGO_URL_CONNECTION }} # URL of MongoDB
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: trace # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
+            - name  : Copy UDR default config file - (run mode)
+              shell: cp {{ UDR_DIR }}/config/udrcfg.yaml {{ NFS_DIR_CONFIG }}/udrcfg.yaml
 
             - name  : Create UDM config dir
               shell : |
@@ -303,11 +442,14 @@
               args:
                 chdir: "{{ UDM_DIR }}"
 
-            - name  : Copy UDM cert's 1/2
+            - name  : Copy UDM cert's 1/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/udm.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/udm/cert/udm.pem
               
-            - name  : Copy UDM cert's 2/2
-              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/udm.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/udm/cert/udm.key
+            - name  : Copy UDM cert's 2/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/udm.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/udm/cert/udm.key                
+
+            - name  : Copy nrf.pem to UDM cert's 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/udm/cert/nrf.pem
 
             - name  : Build udmcfg.yaml config file
               copy:
@@ -333,6 +475,7 @@
                         pem: cert/udm.pem # UDM TLS Certificate
                         key: cert/udm.key # UDM TLS Private key
                     nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
 
                     # test data set from TS33501-f60 Annex C.4
                     SuciProfile: # Home Network Public Key ID = slice index +1
@@ -352,46 +495,10 @@
               shell: rm udmcfg.yaml
               args:
                 chdir: "{{ NFS_DIR_CONFIG }}"
-              
-            - name  : Build udmcfg.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/udmcfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.3
-                    description: UDM initial local configuration
 
-                  configuration:
-                    serviceNameList: # the SBI services provided by this UDM, refer to TS 29.503
-                      - nudm-sdm # Nudm_SubscriberDataManagement service
-                      - nudm-uecm # Nudm_UEContextManagement service
-                      - nudm-ueau # Nudm_UEAuthenticationManagement service
-                      - nudm-ee # Nudm_EventExposureManagement service
-                      - nudm-pp # Nudm_ParameterProvisionDataManagement service
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ UDM_IP_ADDRESS }} # IP used to register to NRF
-                      bindingIPv4: {{ UDM_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ UDM_PORT }} # Port used to bind the service
-                      tls: # the local path of TLS key
-                        pem: cert/udm.pem # UDM TLS Certificate
-                        key: cert/udm.key # UDM TLS Private key
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+            - name  : Copy UDM default config file - (run mode)
+              shell: cp {{ UDM_DIR }}/config/udmcfg.yaml {{ NFS_DIR_CONFIG }}/udmcfg.yaml
 
-                    # test data set from TS33501-f60 Annex C.4
-                    SuciProfile: # Home Network Public Key ID = slice index +1
-                      - ProtectionScheme: 1 # Protect Scheme: Profile A
-                        PrivateKey: c53c22208b61860b06c62e5406a7b330c2b577aa5558981510d128247d38bd1d
-                        PublicKey: 5a8d38864820197c3394b92613b20b91633cbd897119273bf8e4a6f4eec0a650
-                      - ProtectionScheme: 2 # Protect Scheme: Profile B
-                        PrivateKey: F1AB1074477EBCC7F554EA1C5FC368B1616730155E0041AC447D6301975FECDA
-                        PublicKey: 0472DA71976234CE833A6907425867B82E074D44EF907DFB4B3E21C1C2256EBCD15A7DED52FCBB097A4ED250E036C7B9C8C7004C4EEDC4F068CD7BF8D3F900E3B4
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
-              
             - name  : Create AUSF config dir
               shell : |
                 mkdir config
@@ -399,11 +506,14 @@
               args:
                 chdir: "{{ AUSF_DIR }}"
 
-            - name  : Copy AUSF cert's 1/2
+            - name  : Copy AUSF cert's 1/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/ausf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/ausf/cert/ausf.pem
 
-            - name  : Copy AUSF cert's 2/2
-              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/ausf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/ausf/cert/ausf.key
+            - name  : Copy AUSF cert's 2/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/ausf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/ausf/cert/ausf.key                
+
+            - name  : Copy nrf.pem to AUSF cert's 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/ausf/cert/nrf.pem
 
             - name  : Build ausf.yaml config file
               copy:
@@ -425,6 +535,7 @@
                     serviceNameList: # the SBI services provided by this AUSF, refer to TS 29.509
                       - nausf-auth # Nausf_UEAuthentication service
                     nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
                     plmnSupportList: # the PLMNs (Public Land Mobile Network) list supported by this AUSF
                       - mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
                         mnc: {{ MNC_1 }}  # Mobile Network Code (2 or 3 digits string, digit: 0~9)
@@ -443,52 +554,25 @@
               args:
                 chdir: "{{ NFS_DIR_CONFIG }}"
               
-            - name  : Build ausf.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/ausfcfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.3
-                    description: AUSF initial local configuration
+            - name  : Copy AUSF default config file - (run mode)
+              shell: cp {{ AUSF_DIR }}/config/ausfcfg.yaml {{ NFS_DIR_CONFIG }}/ausfcfg.yaml
 
-                  configuration:
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ AUSF_IP_ADDRESS }} # IP used to register to NRF
-                      bindingIPv4: {{ AUSF_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ AUSF_PORT }} # Port used to bind the service
-                      tls: # the local path of TLS key
-                        pem: cert/ausf.pem # AUSF TLS Certificate
-                        key: cert/ausf.key # AUSF TLS Private key
-                    serviceNameList: # the SBI services provided by this AUSF, refer to TS 29.509
-                      - nausf-auth # Nausf_UEAuthentication service
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
-                    plmnSupportList: # the PLMNs (Public Land Mobile Network) list supported by this AUSF
-                      - mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                        mnc: {{ MNC_1 }}  # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                      - mcc: {{ MCC_2 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                        mnc: {{ MNC_2 }}  # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                    groupId: ausfGroup001 # ID for the group of the AUSF
-                    eapAkaSupiImsiPrefix: false # including "imsi-" prefix or not when using the SUPI to do EAP-AKA' authentication
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
-              
             - name  : Create NSSF config dir
               shell : |
                 mkdir config
                 mkdir cert
               args:
-                chdir: "{{ NSSF_DIR }}"
+                chdir: "{{ NSSF_DIR }}"      
 
-            - name  : Copy NSSF cert's 1/2
+            - name  : Copy NSSF cert's 1/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nssf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nssf/cert/nssf.pem
 
-            - name  : Copy NSSF cert's 2/2
-              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nssf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nssf/cert/nssf.key
-              
+            - name  : Copy NSSF cert's 2/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nssf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nssf/cert/nssf.key      
+
+            - name  : Copy nrf.pem to NSSF cert's 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/nssf/cert/nrf.pem       
+
             - name  : Build nssfcfg.yaml config file
               copy:
                 dest: "{{ NSSF_DIR }}/config/nssfcfg.yaml"
@@ -511,13 +595,14 @@
                       - nnssf-nsselection # Nnssf_NSSelection service
                       - nnssf-nssaiavailability # Nnssf_NSSAIAvailability service
                     nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
                     supportedPlmnList: # the PLMNs (Public land mobile network) list supported by this NSSF
-                      - mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                        mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
+                      - mcc: 208 # Mobile Country Code (3 digits string, digit: 0~9)
+                        mnc: 93 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
                     supportedNssaiInPlmnList: # Supported S-NSSAI List for each PLMN
                       - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                          mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                          mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
+                          mcc: 208 # Mobile Country Code (3 digits string, digit: 0~9)
+                          mnc: 93 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
                         supportedSnssaiList: # Supported S-NSSAIs of the PLMN
                           - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
                             sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
@@ -849,364 +934,10 @@
             - name  : Remove NSSF default config file - (run mode)
               shell: rm nssfcfg.yaml
               args:
-                chdir: "{{ NFS_DIR_CONFIG }}"
+                chdir: "{{ NFS_DIR_CONFIG }}"    
 
-            - name  : Build nssfcfg.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/nssfcfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.2
-                    description: NSSF initial local configuration
-
-                  configuration:
-                    nssfName: NSSF # the name of this NSSF
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ NSSF_IP_ADDRESS }} # IP used to register to NRF
-                      bindingIPv4: {{ NSSF_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ NSSF_PORT }} # Port used to bind the service
-                      tls: # the local path of TLS key
-                        pem: cert/nssf.pem # NSSF TLS Certificate
-                        key: cert/nssf.key # NSSF TLS Private key
-                    serviceNameList: # the SBI services provided by this SMF, refer to TS 29.531
-                      - nnssf-nsselection # Nnssf_NSSelection service
-                      - nnssf-nssaiavailability # Nnssf_NSSAIAvailability service
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
-                    supportedPlmnList: # the PLMNs (Public land mobile network) list supported by this NSSF
-                      - mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                        mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                    supportedNssaiInPlmnList: # Supported S-NSSAI List for each PLMN
-                      - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                          mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                          mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                        supportedSnssaiList: # Supported S-NSSAIs of the PLMN
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                    nsiList: # List of available Network Slice Instance (NSI)
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 10
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 11
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 12
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 12
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 13
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 20
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 21
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 22
-                      - snssai: # S-NSSAI of this NSI
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        nsiInformationList: # Information list of this NSI
-                          # the NRF to be used to select the NFs/services within the selected NSI, and an optonal ID
-                          - nrfId: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                            nsiId: 23
-                    amfSetList: # List of AMF Sets that my be assigned by this NSSF
-                      - amfSetId: 1 # the AMF Set identifier
-                        amfList: # Instance ID of the AMFs in this set
-                          - ffa2e8d7-3275-49c7-8631-6af1df1d9d26
-                          - 0e8831c3-6286-4689-ab27-1e2161e15cb1
-                          - a1fba9ba-2e39-4e22-9c74-f749da571d0d
-                        # URI of the NRF used to determine the list of candidate AMF(s) from the AMF Set
-                        nrfAmfSet: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}/nnrf-nfm/v1/nf-instances
-                        # the Nssai availability data information per TA supported by the AMF
-                        supportedNssaiAvailabilityData:
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33456 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33457 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                      - amfSetId: 2 # the AMF Set identifier
-                        # URI of the NRF used to determine the list of candidate AMF(s) from the AMF Set
-                        nrfAmfSet: http://localhost:8084/nnrf-nfm/v1/nf-instances
-                        # the Nssai availability data information per TA supported by the AMF
-                        supportedNssaiAvailabilityData:
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33456 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33458 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                    amfList: # List of AMFs that may be assigned by this NSSF
-                      - nfId: 469de254-2fe5-4ca0-8381-af3f500af77c # ID of this AMF
-                        # The NSSAI availability data information per TA supported by the AMF
-                        supportedNssaiAvailabilityData:
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33456 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33457 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                      - nfId: fbe604a8-27b2-417e-bd7c-8a7be2691f8d # ID of this AMF
-                        # The NSSAI availability data information per TA supported by the AMF
-                        supportedNssaiAvailabilityData:
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33458 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33459 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                      - nfId: b9e6e2cb-5ce8-4cb6-9173-a266dd9a2f0c # ID of this AMF
-                        # The NSSAI availability data information per TA supported by the AMF
-                        supportedNssaiAvailabilityData:
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33456 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                          - tai: # Tracking Area Identifier
-                              plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                                mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                                mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                              tac: 33458 # Tracking Area Code (uinteger, range: 0~16777215)
-                            supportedSnssaiList: # Supported S-NSSAIs of the tracking area
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                    taList: # List of supported tracking area and their related information of this NSSF instance
-                      - tai: # Tracking Area Identity
-                          plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                            mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                            mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                          tac: 33456 # Tracking Area Code (uinteger, range: 0~16777215)
-                        accessType: 3GPP_ACCESS # Access type of the tracking area
-                        supportedSnssaiList: # List of supported S-NSSAIs of the tracking area
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                      - tai: # Tracking Area Identity
-                          plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                            mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                            mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                          tac: 33457 # Tracking Area Code (uinteger, range: 0~16777215)
-                        accessType: 3GPP_ACCESS # Access type of the tracking area
-                        supportedSnssaiList: # List of supported S-NSSAIs of the tracking area
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                      - tai: # Tracking Area Identifier
-                          plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                            mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                            mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                          tac: 33458 # Tracking Area Code (uinteger, range: 0~16777215)
-                        accessType: 3GPP_ACCESS # Access type of the tracking area
-                        supportedSnssaiList: # List of supported S-NSSAIs of the tracking area
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                        restrictedSnssaiList: # List of restricted S-NSSAIs of the tracking area
-                          - homePlmnId: # Home PLMN identifier
-                              mcc: 310 # Mobile Country Code (3 digits string, digit: 0~9)
-                              mnc: 560 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                            sNssaiList: # the S-NSSAIs List
-                              - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                      - tai: # Tracking Area Identifier
-                          plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                            mcc: 466 # Mobile Country Code (3 digits string, digit: 0~9)
-                            mnc: 92 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                          tac: 33459 # Tracking Area Code (uinteger, range: 0~16777215)
-                        accessType: 3GPP_ACCESS # Access type of the tracking area
-                        supportedSnssaiList: # List of supported S-NSSAIs of the tracking area
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                          - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        restrictedSnssaiList: # List of restricted S-NSSAIs of the tracking area
-                          - homePlmnId: # Home PLMN identifier
-                              mcc: 310 # Mobile Country Code (3 digits string, digit: 0~9)
-                              mnc: 560 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                            sNssaiList: # the S-NSSAIs List
-                              - sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                    # List of mappings of S-NSSAI in the serving network and the value of the home network
-                    mappingListFromPlmn:
-                      - operatorName: NTT Docomo # Home PLMN name
-                        homePlmnId: # Home PLMN identifier
-                          mcc: 440 # Mobile Country Code (3 digits string, digit: 0~9)
-                          mnc: 10 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                        mappingOfSnssai: # List of S-NSSAIs mapping
-                          - servingSnssai: # S-NSSAI in the serving network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                            homeSnssai: # S-NSSAI in the home network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 1 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - servingSnssai: # S-NSSAI in the serving network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                            homeSnssai: # S-NSSAI in the home network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - servingSnssai: # S-NSSAI in the serving network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                            homeSnssai: # S-NSSAI in the home network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000004 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - servingSnssai: # S-NSSAI in the serving network
-                              sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                            homeSnssai: # S-NSSAI in the home network
-                              sst: 2 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                      - operatorName: AT&T Mobility # Home PLMN name
-                        homePlmnId: # Home PLMN identifier
-                          mcc: 310 # Mobile Country Code (3 digits string, digit: 0~9)
-                          mnc: 560 # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                        mappingOfSnssai:
-                          - servingSnssai: # S-NSSAI in the serving network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000001 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                            homeSnssai: # S-NSSAI in the home network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - servingSnssai: # S-NSSAI in the serving network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000002 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                            homeSnssai: # S-NSSAI in the home network
-                              sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                              sd: 000003 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
+            - name  : Copy NSSF default config file - (run mode)
+              shell: cp {{ NSSF_DIR }}/config/nssfcfg.yaml {{ NFS_DIR_CONFIG }}/nssfcfg.yaml
 
             - name  : Create AMF config dir
               shell : |
@@ -1215,12 +946,15 @@
               args:
                 chdir: "{{ AMF_DIR }}"
 
-            - name  : Copy AMF cert's 1/2
+            - name  : Copy AMF cert's 1/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/amf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/amf/cert/amf.pem
 
-            - name  : Copy AMF cert's 2/2
+            - name  : Copy AMF cert's 2/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/amf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/amf/cert/amf.key
-              
+ 
+            - name  : Copy nrf.pem to AMF cert's 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/amf/cert/nrf.pem       
+
             - name  : Build amfcfg.yaml config file
               copy:
                 dest: "{{ AMF_DIR }}/config/amfcfg.yaml"
@@ -1234,32 +968,42 @@
                     ngapIpList:  # the IP list of N2 interfaces on this AMF
                       - {{ AMF_NGAP_IP_ADDRESS }}
                     ngapPort: {{ AMF_SCTP_PORT }} # the SCTP port listened by NGAP
-                    sbi: # Service-based interface information
+
+                    # Service-based Interface (SBI) Configuration
+                    sbi:
                       scheme: http # the protocol for sbi (http or https)
                       registerIPv4: {{ AMF_IP_ADDRESS }} # IP used to register to NRF
                       bindingIPv4: {{ AMF_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ AMF_PORT }} # port used to bind the service
+                      port: 8000 # port used to bind the service
                       tls: # the local path of TLS key
                         pem: cert/amf.pem # AMF TLS Certificate
                         key: cert/amf.key # AMF TLS Private key
-                    serviceNameList: # the SBI services provided by this AMF, refer to TS 29.518
+
+                    # SBI Services offered by this AMF, as per TS 29.518
+                    serviceNameList:
                       - namf-comm # Namf_Communication service
                       - namf-evts # Namf_EventExposure service
                       - namf-mt   # Namf_MT service
                       - namf-loc  # Namf_Location service
                       - namf-oam  # OAM service
-                    servedGuamiList: # Guami (Globally Unique AMF ID) list supported by this AMF
+
+                    # Guami (Globally Unique AMF ID) list supported by this AMF
+                    servedGuamiList:
                       # <GUAMI> = <MCC><MNC><AMF ID>
                       - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
                           mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
                           mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
                         amfId: cafe00 # AMF identifier (3 bytes hex string, range: 000000~FFFFFF)
-                    supportTaiList:  # the TAI (Tracking Area Identifier) list supported by this AMF
+
+                    # the TAI (Tracking Area Identifier) list supported by this AMF
+                    supportTaiList:
                       - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
                           mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
                           mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
                         tac: 000001 # Tracking Area Code (3 bytes hex string, range: 000000~FFFFFF)
-                    plmnSupportList: # the PLMNs (Public land mobile network) list supported by this AMF
+
+                    # the PLMNs (Public land mobile network) list supported by this AMF
+                    plmnSupportList:
                       - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
                           mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
                           mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
@@ -1268,27 +1012,40 @@
                             sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
                           - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
                             sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                    supportDnnList:  # the DNN (Data Network Name) list supported by this AMF
+
+                    # the DNN (Data Network Name) list supported by this AMF
+                    supportDnnList:
                       - internet
                     nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
-                    security:  # NAS security parameters
-                      integrityOrder: # the priority of integrity algorithms
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
+
+                    # NAS Security Configuration
+                    # the priority of integrity algorithms
+                    # the priority of ciphering algorithms
+                    security:
+                      integrityOrder:
                         - NIA2
                         # - NIA0
-                      cipheringOrder: # the priority of ciphering algorithms
+                      cipheringOrder:
                         - NEA0
                         - NEA2
-                    networkName:  # the name of this core network
+
+                    # Network Name Information
+                    networkName:
                       full: free5GC
                       short: free
-                    ngapIE: # Optional NGAP IEs
+
+                    # Optional NGAP Information Elements (IE)
+                    ngapIE:
                       mobilityRestrictionList: # Mobility Restriction List IE, refer to TS 38.413
                         enable: true # append this IE in related message or not
                       maskedIMEISV: # Masked IMEISV IE, refer to TS 38.413
                         enable: true # append this IE in related message or not
                       redirectionVoiceFallback: # Redirection Voice Fallback IE, refer to TS 38.413
                         enable: false # append this IE in related message or not
-                    nasIE: # Optional NAS IEs
+
+                    # Optional NAS Information Elements (IE)
+                    nasIE:
                       networkFeatureSupport5GS: # 5gs Network Feature Support IE, refer to TS 24.501
                         enable: true # append this IE in Registration accept or not
                         length: 1 # IE content length (uinteger, range: 1~3)
@@ -1338,7 +1095,9 @@
                       expireTime: 6s   # default is 6 seconds
                       maxRetryTimes: 4 # the max number of retransmission
                     locality: area1 # Name of the location where a set of AMF, SMF, PCF and UPFs are located
-                    sctp: # set the sctp server setting <optinal>, once this field is set, please also add maxInputStream, maxOsStream, maxAttempts, maxInitTimeOut
+
+                    # set the sctp server setting <optinal>, once this field is set, please also add maxInputStream, maxOsStream, maxAttempts, maxInitTimeOut
+                    sctp:
                       numOstreams: 3 # the maximum out streams of each sctp connection
                       maxInstreams: 5 # the maximum in streams of each sctp connection
                       maxAttempts: 2 # the maximum attempts of each sctp connection
@@ -1354,135 +1113,9 @@
               shell: rm amfcfg.yaml
               args:
                 chdir: "{{ NFS_DIR_CONFIG }}"
-              
-            - name  : Build amfcfg.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/amfcfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.9
-                    description: AMF initial local configuration
 
-                  configuration:
-                    amfName: AMF # the name of this AMF
-                    ngapIpList:  # the IP list of N2 interfaces on this AMF
-                      - {{ AMF_NGAP_IP_ADDRESS }}
-                    ngapPort: {{ AMF_SCTP_PORT }} # the SCTP port listened by NGAP
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ AMF_IP_ADDRESS }} # IP used to register to NRF
-                      bindingIPv4: {{ AMF_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ AMF_PORT }} # port used to bind the service
-                      tls: # the local path of TLS key
-                        pem: cert/amf.pem # AMF TLS Certificate
-                        key: cert/amf.key # AMF TLS Private key
-                    serviceNameList: # the SBI services provided by this AMF, refer to TS 29.518
-                      - namf-comm # Namf_Communication service
-                      - namf-evts # Namf_EventExposure service
-                      - namf-mt   # Namf_MT service
-                      - namf-loc  # Namf_Location service
-                      - namf-oam  # OAM service
-                    servedGuamiList: # Guami (Globally Unique AMF ID) list supported by this AMF
-                      # <GUAMI> = <MCC><MNC><AMF ID>
-                      - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                          mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                          mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                        amfId: cafe00 # AMF identifier (3 bytes hex string, range: 000000~FFFFFF)
-                    supportTaiList:  # the TAI (Tracking Area Identifier) list supported by this AMF
-                      - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                          mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                          mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                        tac: 000001 # Tracking Area Code (3 bytes hex string, range: 000000~FFFFFF)
-                    plmnSupportList: # the PLMNs (Public land mobile network) list supported by this AMF
-                      - plmnId: # Public Land Mobile Network ID, <PLMN ID> = <MCC><MNC>
-                          mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                          mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                        snssaiList: # the S-NSSAI (Single Network Slice Selection Assistance Information) list supported by this AMF
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                          - sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                            sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                    supportDnnList:  # the DNN (Data Network Name) list supported by this AMF
-                      - internet
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
-                    security:  # NAS security parameters
-                      integrityOrder: # the priority of integrity algorithms
-                        - NIA2
-                        # - NIA0
-                      cipheringOrder: # the priority of ciphering algorithms
-                        - NEA0
-                        - NEA2
-                    networkName:  # the name of this core network
-                      full: free5GC
-                      short: free
-                    ngapIE: # Optional NGAP IEs
-                      mobilityRestrictionList: # Mobility Restriction List IE, refer to TS 38.413
-                        enable: true # append this IE in related message or not
-                      maskedIMEISV: # Masked IMEISV IE, refer to TS 38.413
-                        enable: true # append this IE in related message or not
-                      redirectionVoiceFallback: # Redirection Voice Fallback IE, refer to TS 38.413
-                        enable: false # append this IE in related message or not
-                    nasIE: # Optional NAS IEs
-                      networkFeatureSupport5GS: # 5gs Network Feature Support IE, refer to TS 24.501
-                        enable: true # append this IE in Registration accept or not
-                        length: 1 # IE content length (uinteger, range: 1~3)
-                        imsVoPS: 0 # IMS voice over PS session indicator (uinteger, range: 0~1)
-                        emc: 0 # Emergency service support indicator for 3GPP access (uinteger, range: 0~3)
-                        emf: 0 # Emergency service fallback indicator for 3GPP access (uinteger, range: 0~3)
-                        iwkN26: 0 # Interworking without N26 interface indicator (uinteger, range: 0~1)
-                        mpsi: 0 # MPS indicator (uinteger, range: 0~1)
-                        emcN3: 0 # Emergency service support indicator for Non-3GPP access (uinteger, range: 0~1)
-                        mcsi: 0 # MCS indicator (uinteger, range: 0~1)
-                    t3502Value: 720  # timer value (seconds) at UE side
-                    t3512Value: 3600 # timer value (seconds) at UE side
-                    non3gppDeregTimerValue: 3240 # timer value (seconds) at UE side
-                    # retransmission timer for paging message
-                    t3513:
-                      enable: true     # true or false
-                      expireTime: 6s   # default is 6 seconds
-                      maxRetryTimes: 4 # the max number of retransmission
-                    # retransmission timer for NAS Deregistration Request message
-                    t3522:
-                      enable: true     # true or false
-                      expireTime: 6s   # default is 6 seconds
-                      maxRetryTimes: 4 # the max number of retransmission
-                    # retransmission timer for NAS Registration Accept message
-                    t3550:
-                      enable: true     # true or false
-                      expireTime: 6s   # default is 6 seconds
-                      maxRetryTimes: 4 # the max number of retransmission
-                    # retransmission timer for NAS Configuration Update Command message
-                    t3555:
-                      enable: true     # true or false
-                      expireTime: 6s   # default is 6 seconds
-                      maxRetryTimes: 4 # the max number of retransmission
-                    # retransmission timer for NAS Authentication Request/Security Mode Command message
-                    t3560:
-                      enable: true     # true or false
-                      expireTime: 6s   # default is 6 seconds
-                      maxRetryTimes: 4 # the max number of retransmission
-                    # retransmission timer for NAS Notification message
-                    t3565:
-                      enable: true     # true or false
-                      expireTime: 6s   # default is 6 seconds
-                      maxRetryTimes: 4 # the max number of retransmission
-                    # retransmission timer for NAS Identity Request message
-                    t3570:
-                      enable: true     # true or false
-                      expireTime: 6s   # default is 6 seconds
-                      maxRetryTimes: 4 # the max number of retransmission
-                    locality: area1 # Name of the location where a set of AMF, SMF, PCF and UPFs are located
-                    sctp: # set the sctp server setting <optinal>, once this field is set, please also add maxInputStream, maxOsStream, maxAttempts, maxInitTimeOut
-                      numOstreams: 3 # the maximum out streams of each sctp connection
-                      maxInstreams: 5 # the maximum in streams of each sctp connection
-                      maxAttempts: 2 # the maximum attempts of each sctp connection
-                      maxInitTimeout: 2 # the maximum init timeout of each sctp connection
-                    defaultUECtxReq: false # the default value of UE Context Request to decide when triggering Initial Context Setup procedure
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
+            - name  : Copy AMF default config file - (run mode)
+              shell: cp {{ AMF_DIR }}/config/amfcfg.yaml {{ NFS_DIR_CONFIG }}/amfcfg.yaml
 
             - name  : Create PCF config dir
               shell : |
@@ -1491,11 +1124,14 @@
               args:
                 chdir: "{{ PCF_DIR }}"
 
-            - name  : Copy PCF cert's 1/2
+            - name  : Copy PCF cert's 1/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/pcf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/pcf/cert/pcf.pem
 
-            - name  : Copy PCF cert's 2/2
+            - name  : Copy PCF cert's 2/3
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/pcf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/pcf/cert/pcf.key
+
+            - name  : Copy nrf.pem to PCF cert's 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/pcf/cert/nrf.pem       
 
             - name  : Build pcfcfg.yaml config file
               copy:
@@ -1518,6 +1154,7 @@
                     timeFormat: 2019-01-02 15:04:05 # time format of this PCF
                     defaultBdtRefId: BdtPolicyId-   # BDT Reference ID, indicating transfer policies of background data transfer.
                     nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}  # a valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
                     serviceList:   # the SBI services provided by this PCF, refer to TS 29.507
                       - serviceName: npcf-am-policy-control # Npcf_AMPolicyControl service
                       - serviceName: npcf-smpolicycontrol   # Npcf_SMPolicyControl service
@@ -1541,46 +1178,9 @@
               shell: rm pcfcfg.yaml
               args:
                 chdir: "{{ NFS_DIR_CONFIG }}"
-              
-            - name  : Build pcfcfg.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/pcfcfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.2
-                    description: PCF initial local configuration
 
-                  configuration:
-                    pcfName: PCF # the name of this PCF
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ PCF_IP_ADDRESS }} # IP used to register to NRF
-                      bindingIPv4: {{ PCF_IP_ADDRESS }}  # IP used to bind the service
-                      port: {{ PCF_PORT }}              # port used to bind the service
-                      tls: # the local path of TLS key
-                        pem: cert/pcf.pem # PCF TLS Certificate
-                        key: cert/pcf.key # PCF TLS Private key
-                    timeFormat: 2019-01-02 15:04:05 # time format of this PCF
-                    defaultBdtRefId: BdtPolicyId-   # BDT Reference ID, indicating transfer policies of background data transfer.
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }}  # a valid URI of NRF
-                    serviceList:   # the SBI services provided by this PCF, refer to TS 29.507
-                      - serviceName: npcf-am-policy-control # Npcf_AMPolicyControl service
-                      - serviceName: npcf-smpolicycontrol   # Npcf_SMPolicyControl service
-                        suppFeat: 3fff # the features supported by Npcf_SMPolicyControl, name defined in TS 29.512 5.8-1, value defined in TS 29.571 5.2.2
-                      - serviceName: npcf-bdtpolicycontrol    # Npcf_BDTPolicyControl service
-                      - serviceName: npcf-policyauthorization # Npcf_PolicyAuthorization service
-                        suppFeat: 3    # the features supported by Npcf_PolicyAuthorization, name defined in TS 29.514 5.8-1, value defined in TS 29.571 5.2.2
-                      - serviceName: npcf-eventexposure       # Npcf_EventExposure service
-                      - serviceName: npcf-ue-policy-control   # Npcf_UEPolicyControl service
-                    mongodb:       # the mongodb connected by this PCF
-                      name: free5gc                  # name of the mongodb
-                      url: {{ MONGO_URL_CONNECTION }} # a valid URL of the mongodb
-                    locality: area1 # Name of the location where a set of AMF, SMF, PCF and UPFs are located
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
+            - name  : Copy PCF default config file - (run mode)
+              shell: cp {{ PCF_DIR }}/config/pcfcfg.yaml {{ NFS_DIR_CONFIG }}/pcfcfg.yaml    
 
             - name  : Create SMF config dir
               shell : |
@@ -1593,7 +1193,10 @@
               shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/smf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/smf/cert/smf.pem
 
             - name  : Copy SMF cert's 2/2
-              shell : cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/smf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/smf/cert/smf.key
+              shell : cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/smf.key {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/smf/cert/smf.key  
+
+            - name  : Copy nrf.pem to SMF cert's 3/3
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/nrf.pem {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/NFs/smf/cert/nrf.pem      
 
             - name  : Build smfcfg.yaml config file
               copy:
@@ -1605,7 +1208,9 @@
 
                   configuration:
                     smfName: SMF # the name of this SMF
-                    sbi: # Service-based interface information
+
+                    # Service-based interface information
+                    sbi:
                       scheme: http # the protocol for sbi (http or https)
                       registerIPv4: {{ SMF_IP_ADDRESS }} # IP used to register to NRF
                       bindingIPv4: {{ SMF_IP_ADDRESS }} # IP used to bind the service
@@ -1613,11 +1218,15 @@
                       tls: # the local path of TLS key
                         key: cert/smf.key # SMF TLS Certificate
                         pem: cert/smf.pem # SMF TLS Private key
-                    serviceNameList: # the SBI services provided by this SMF, refer to TS 29.502
+
+                    # the SBI services provided by this SMF, refer to TS 29.502
+                    serviceNameList:
                       - nsmf-pdusession # Nsmf_PDUSession service
                       - nsmf-event-exposure # Nsmf_EventExposure service
                       - nsmf-oam # OAM service
-                    snssaiInfos: # the S-NSSAI (Single Network Slice Selection Assistance Information) list supported by this AMF
+
+                    # the S-NSSAI (Single Network Slice Selection Assistance Information) list supported by this AMF
+                    snssaiInfos:
                       - sNssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
                           sst: 1 # Slice/Service Type (uinteger, range: 0~255)
                           sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
@@ -1634,16 +1243,25 @@
                             dns: # the IP address of DNS
                               ipv4: 8.8.8.8
                               ipv6: 2001:4860:4860::8888
-                    plmnList: # the list of PLMN IDs that this SMF belongs to (optional, remove this key when unnecessary)
+
+                    # Optional: PLMN IDs configuration.
+                    plmnList:
                       - mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
                         mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
                     locality: area1 # Name of the location where a set of AMF, SMF, PCF and UPFs are located
-                    pfcp: # the IP address of N4 interface on this SMF (PFCP)
+
+                    # PFCP (Packet Forwarding Control Protocol) configuration for N4 interface.
+                    pfcp:
                       # addr config is deprecated in smf config v1.0.3, please use the following config
                       nodeID: {{ SMF_N4_INTERFACE_IP_ADDRESS }} # the Node ID of this SMF
                       listenAddr: {{ SMF_N4_INTERFACE_IP_ADDRESS }} # the IP/FQDN of N4 interface on this SMF (PFCP)
                       externalAddr: {{ SMF_N4_INTERFACE_IP_ADDRESS }} # the IP/FQDN of N4 interface on this SMF (PFCP)
-                    userplaneInformation: # list of userplane information
+                      assocFailAlertInterval: 10s
+                      assocFailRetryInterval: 30s
+                      heartbeatInterval: 10s
+
+                    # Userplane nodes information, specifying details for AN and UPF.
+                    userplaneInformation:
                       upNodes: # information of userplane node (AN or UPF)
                         gNB1: # the name of the node
                           type: AN # the type of the node (AN or UPF)
@@ -1670,32 +1288,44 @@
                                     - cidr: 10.61.0.0/16
                                   staticPools:
                                     - cidr: 10.61.100.0/24
+                          # The IP address for the N3 interface must match the IP bound in the UPF N3 interface.
+                          # If UPF binds to a specific IP, set that same IP here.
+                          # If UPF binds to all IPs (0.0.0.0), you can set any of the available UPF IPs here.
+                          # Do NOT set 0.0.0.0 as this is not a valid routable address.
                           interfaces: # Interface list for this UPF
                             - interfaceType: N3 # the type of the interface (N3 or N9)
                               endpoints: # the IP address of this N3/N9 interface on this UPF
                                 - {{ SMF_N3_INTERFACE_IP_ADDRESS }}
-                              networkInstances:  # Data Network Name (DNN)
+                              networkInstances: # Data Network Name (DNN)
                                 - internet
-                      links: # the topology graph of userplane, A and B represent the two nodes of each link
+
+                      # the topology graph of userplane, A and B represent the two nodes of each link
+                      links:
                         - A: gNB1
                           B: UPF
-                    # retransmission timer for pdu session modification command
-                    t3591:
-                      enable: true     # true or false
-                      expireTime: 16s   # default is 6 seconds
-                      maxRetryTimes: 3 # the max number of retransmission
-                    # retransmission timer for pdu session release command
-                    t3592:
-                      enable: true     # true or false
-                      expireTime: 16s   # default is 6 seconds
-                      maxRetryTimes: 3 # the max number of retransmission
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
-                    #urrPeriod: 10 # default usage report period in seconds
-                    #urrThreshold: 1000 # default usage report threshold in bytes
 
-                  logger: # log output setting
+                    # retransmission timer for PDU session modification command
+                    t3591:
+                      enable: true # true or false
+                      expireTime: 16s # default is 6 seconds
+                      maxRetryTimes: 3 # the max number of retransmission
+
+                    # retransmission timer for PDU session release command
+                    t3592:
+                      enable: true # true or false
+                      expireTime: 16s # default is 6 seconds
+                      maxRetryTimes: 3 # the max number of retransmission
+
+                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+                    nrfCertPem: cert/nrf.pem # NRF Certificate
+                    urrPeriod: 30 # default usage report period in seconds
+                    urrThreshold: 500000 # default usage report threshold in bytes
+                    requestedUnit: 1000
+
+                  # Logging Configuration
+                  logger:
                     enable: true # true or false
-                    level: trace # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
+                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
                     reportCaller: false # enable the caller report or not, value: true or false
 
             - name  : Remove SMF default configs files - (run mode)
@@ -1705,108 +1335,8 @@
               args:
                 chdir: "{{ NFS_DIR_CONFIG }}"
 
-            - name  : Build smfcfg.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/smfcfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.7
-                    description: SMF initial local configuration
-
-                  configuration:
-                    smfName: SMF # the name of this SMF
-                    sbi: # Service-based interface information
-                      scheme: http # the protocol for sbi (http or https)
-                      registerIPv4: {{ SMF_IP_ADDRESS }} # IP used to register to NRF
-                      bindingIPv4: {{ SMF_IP_ADDRESS }} # IP used to bind the service
-                      port: {{ SMF_PORT }} # Port used to bind the service
-                      tls: # the local path of TLS key
-                        key: cert/smf.key # SMF TLS Certificate
-                        pem: cert/smf.pem # SMF TLS Private key
-                    serviceNameList: # the SBI services provided by this SMF, refer to TS 29.502
-                      - nsmf-pdusession # Nsmf_PDUSession service
-                      - nsmf-event-exposure # Nsmf_EventExposure service
-                      - nsmf-oam # OAM service
-                    snssaiInfos: # the S-NSSAI (Single Network Slice Selection Assistance Information) list supported by this AMF
-                      - sNssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        dnnInfos: # DNN information list
-                          - dnn: internet # Data Network Name
-                            dns: # the IP address of DNS
-                              ipv4: 8.8.8.8
-                              ipv6: 2001:4860:4860::8888
-                      - sNssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
-                          sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                          sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                        dnnInfos: # DNN information list
-                          - dnn: internet # Data Network Name
-                            dns: # the IP address of DNS
-                              ipv4: 8.8.8.8
-                              ipv6: 2001:4860:4860::8888
-                    plmnList: # the list of PLMN IDs that this SMF belongs to (optional, remove this key when unnecessary)
-                      - mcc: {{ MCC_1 }} # Mobile Country Code (3 digits string, digit: 0~9)
-                        mnc: {{ MNC_1 }} # Mobile Network Code (2 or 3 digits string, digit: 0~9)
-                    locality: area1 # Name of the location where a set of AMF, SMF, PCF and UPFs are located
-                    pfcp: # the IP address of N4 interface on this SMF (PFCP)
-                      # addr config is deprecated in smf config v1.0.3, please use the following config
-                      nodeID: {{ SMF_N4_INTERFACE_IP_ADDRESS }} # the Node ID of this SMF
-                      listenAddr: {{ SMF_N4_INTERFACE_IP_ADDRESS }} # the IP/FQDN of N4 interface on this SMF (PFCP)
-                      externalAddr: {{ SMF_N4_INTERFACE_IP_ADDRESS }} # the IP/FQDN of N4 interface on this SMF (PFCP)
-                    userplaneInformation: # list of userplane information
-                      upNodes: # information of userplane node (AN or UPF)
-                        gNB1: # the name of the node
-                          type: AN # the type of the node (AN or UPF)
-                        UPF: # the name of the node
-                          type: UPF # the type of the node (AN or UPF)
-                          nodeID: {{ UPF_IP_ADDRESS   }} # the Node ID of this UPF
-                          addr: {{ UPF_IP_ADDRESS   }} # the IP/FQDN of N4 interface on this UPF (PFCP)
-                          sNssaiUpfInfos: # S-NSSAI information list for this UPF
-                            - sNssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
-                                sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 010203 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              dnnUpfInfoList: # DNN information list for this S-NSSAI
-                                - dnn: internet
-                                  pools:
-                                    - cidr: {{ CLASSLESS_INTER_DOMAIN_ROUTING_IPV4_POOL_OF_UE }}/16
-                                  staticPools:
-                                    - cidr: 10.60.100.0/24
-                            - sNssai: # S-NSSAI (Single Network Slice Selection Assistance Information)
-                                sst: 1 # Slice/Service Type (uinteger, range: 0~255)
-                                sd: 112233 # Slice Differentiator (3 bytes hex string, range: 000000~FFFFFF)
-                              dnnUpfInfoList: # DNN information list for this S-NSSAI
-                                - dnn: internet
-                                  pools:
-                                    - cidr: 10.61.0.0/16
-                                  staticPools:
-                                    - cidr: 10.61.100.0/24
-                          interfaces: # Interface list for this UPF
-                            - interfaceType: N3 # the type of the interface (N3 or N9)
-                              endpoints: # the IP address of this N3/N9 interface on this UPF
-                                - {{ SMF_N3_INTERFACE_IP_ADDRESS }}
-                              networkInstances:  # Data Network Name (DNN)
-                                - internet
-                      links: # the topology graph of userplane, A and B represent the two nodes of each link
-                        - A: gNB1
-                          B: UPF
-                    # retransmission timer for pdu session modification command
-                    t3591:
-                      enable: true     # true or false
-                      expireTime: 16s   # default is 6 seconds
-                      maxRetryTimes: 3 # the max number of retransmission
-                    # retransmission timer for pdu session release command
-                    t3592:
-                      enable: true     # true or false
-                      expireTime: 16s   # default is 6 seconds
-                      maxRetryTimes: 3 # the max number of retransmission
-                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
-                    #urrPeriod: 10 # default usage report period in seconds
-                    #urrThreshold: 1000 # default usage report threshold in bytes
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: trace # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
+            - name  : Copy SMF default config file - (run mode)
+              shell: cp {{ SMF_DIR }}/config/smfcfg.yaml {{ NFS_DIR_CONFIG }}/smfcfg.yaml    
 
             - name  : Build uerouting.yaml config file
               copy:
@@ -1864,84 +1394,15 @@
                           flowDescriptions: # Represents a 3-tuple with protocol, server ip and server port for UL/DL application traffic
                             - permit out ip from 10.60.0.1 8080 to any
 
-            - name  : Build uerouting.yaml default config file - (run mode)
-              copy:
-                dest: "{{ NFS_DIR_CONFIG }}/uerouting.yaml"
-                content: |
-                  info:
-                    version: 1.0.7
-                    description: Routing information for UE
+            - name  : Copy SMF (ue-Routing) default config file - (run mode)
+              shell: cp {{ SMF_DIR }}/config/uerouting.yaml {{ NFS_DIR_CONFIG }}/uerouting.yaml                                   
 
-                  ueRoutingInfo: # the list of UE routing information
-                    UE1: # Group Name
-                      members:
-                      - imsi-2089300007487 # Subscription Permanent Identifier of the UE
-                      - imsi-2089300007488
-                      - imsi-2089300007489
-                      - imsi-2089300007440
-                      - imsi-2089300007441
-                      topology: # Network topology for this group (Uplink: A->B, Downlink: B->A)
-                      # default path derived from this topology
-                      # node name should be consistent with smfcfg.yaml
-                        - A: gNB1
-                          B: BranchingUPF
-                        - A: BranchingUPF
-                          B: AnchorUPF1
-                      specificPath:
-                        - dest: 10.60.0.103/32 # the destination IP address on Data Network (DN)
-                          # the order of UPF nodes in this path. We use the UPF's name to represent each UPF node.
-                          # The UPF's name should be consistent with smfcfg.yaml
-                          path: [BranchingUPF, AnchorUPF2]
-
-                    UE2: # Group Name
-                      members:
-                      - imsi-208930000007486 # Subscription Permanent Identifier of the UE
-                      topology: # Network topology for this group (Uplink: A->B, Downlink: B->A)
-                      # default path derived from this topology
-                      # node name should be consistent with smfcfg.yaml
-                        - A: gNB1
-                          B: BranchingUPF
-                        - A: BranchingUPF
-                          B: AnchorUPF1
-                      specificPath:
-                        - dest: 10.0.0.11/32 # the destination IP address on Data Network (DN)
-                          # the order of UPF nodes in this path. We use the UPF's name to represent each UPF node.
-                          # The UPF's name should be consistent with smfcfg.yaml
-                          path: [BranchingUPF, AnchorUPF2]
-
-                  routeProfile: # Maintains the mapping between RouteProfileID and ForwardingPolicyID of UPF
-                    MEC1: # Route Profile identifier
-                      forwardingPolicyID: 10 # Forwarding Policy ID of the route profile
-
-                  pfdDataForApp: # PFDs for an Application
-                    - applicationId: edge # Application identifier
-                      pfds: # PFDs for the Application
-                        - pfdID: pfd1 # PFD identifier
-                          flowDescriptions: # Represents a 3-tuple with protocol, server ip and server port for UL/DL application traffic
-                            - permit out ip from 10.60.0.1 8080 to any
-
-            - name  : Remove webuicfg.yaml default file config
-              shell : rm config/webuicfg.yaml
+            - name  : Create UPF config dir
+              shell : |
+                mkdir config
+                mkdir cert
               args:
-                chdir: "{{ WEB_CONSOLE_BASE_DIR }}"
-
-            - name  : Build webuicfg.yaml config file
-              copy:
-                dest: "{{ WEB_CONSOLE_BASE_DIR }}/config/webuicfg.yaml"
-                content: |
-                  info:
-                    version: 1.0.1
-                    description: WebUI initial local configuration
-
-                  configuration:
-                    mongodb: # the mongodb connected by this webui
-                      name: free5gc # name of the mongodb
-                      url: {{ MONGO_URL_CONNECTION }} # a valid URL of the mongodb
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
+                chdir: "{{ UPF_DIR }}"
 
             - name  : Remove UPF default file config
               shell : rm upfcfg.yaml
@@ -1950,53 +1411,12 @@
 
             - name  : Build upfcfg.yaml config file
               copy:
-                dest: "{{ NFS_DIR_CONFIG }}/upfcfg.yaml"
-                content: |
-                  version: 1.0.3
-                  description: UPF initial local configuration
-
-                  # The listen IP and nodeID of the N4 interface on this UPF (Can't set to 0.0.0.0)
-                  pfcp:
-                    addr: {{ UPF_IP_ADDRESS }}   # IP addr for listening
-                    nodeID: {{ UPF_IP_ADDRESS }} # External IP or FQDN can be reached
-                    retransTimeout: 1s # retransmission timeout
-                    maxRetrans: 3 # the max number of retransmission
-
-                  gtpu:
-                    forwarder: gtp5g
-                    # The IP list of the N3/N9 interfaces on this UPF
-                    # If there are multiple connection, set addr to 0.0.0.0 or list all the addresses
-                    ifList:
-                      - addr: {{ GTPU_UPF_IP_ADDRESS }}
-                        type: N3
-                        # name: upf.5gc.nctu.me
-                        # ifname: gtpif
-                        # mtu: 1400
-
-                  # The DNN list supported by UPF
-                  dnnList:
-                    - dnn: internet # Data Network Name
-                      cidr: {{ CLASSLESS_INTER_DOMAIN_ROUTING_IPV4_POOL_OF_UE }}/24 # Classless Inter-Domain Routing for assigned IPv4 pool of UE
-                      # natifname: eth0
-
-                  logger: # log output setting
-                    enable: true # true or false
-                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
-                    reportCaller: false # enable the caller report or not, value: true or false
-
-            - name  : Create UPF config dir
-              shell : |
-                mkdir config
-              args:
-                chdir: "{{ UPF_DIR }}"
-
-            - name  : Build upfcfg.yaml config file (debug mode)
-              copy:
                 dest: "{{ UPF_DIR }}/config/upfcfg.yaml"
                 content: |
                   version: 1.0.3
                   description: UPF initial local configuration
 
+                  # PFCP Configuration
                   # The listen IP and nodeID of the N4 interface on this UPF (Can't set to 0.0.0.0)
                   pfcp:
                     addr: {{ UPF_IP_ADDRESS }}   # IP addr for listening
@@ -2004,10 +1424,14 @@
                     retransTimeout: 1s # retransmission timeout
                     maxRetrans: 3 # the max number of retransmission
 
+                  # GTP-U Configuration
                   gtpu:
                     forwarder: gtp5g
                     # The IP list of the N3/N9 interfaces on this UPF
-                    # If there are multiple connection, set addr to 0.0.0.0 or list all the addresses
+                    # You can bind this to a specific IP from your available subnets (e.g., 10.10.0.1).
+                    # Alternatively, you can bind it to all interfaces using 0.0.0.0.
+                    # If you bind to a specific IP, ensure SMF uses the same IP in its N3 configuration.
+                    # If you bind to all (0.0.0.0), SMF can use any of the available UPF IPs, but do not use 0.0.0.0 in SMF.
                     ifList:
                       - addr: {{ GTPU_UPF_IP_ADDRESS }}
                         type: N3
@@ -2015,36 +1439,128 @@
                         # ifname: gtpif
                         # mtu: 1400
 
-                  # The DNN list supported by UPF
+                  # Supported DNNs
+                  # List of Data Network Names (DNN) supported by this UPF.
                   dnnList:
                     - dnn: internet # Data Network Name
                       cidr: {{ CLASSLESS_INTER_DOMAIN_ROUTING_IPV4_POOL_OF_UE }}/24 # Classless Inter-Domain Routing for assigned IPv4 pool of UE
+                    #- dnn: internet # Data Network Name
+                    #  cidr: 10.61.0.0/16 # Classless Inter-Domain Routing for assigned IPv4 pool of UE
                       # natifname: eth0
 
-                  logger: # log output setting
+                  # Logging Configuration
+                  # Controls logging level and output for the UPF.
+                  logger:
                     enable: true # true or false
                     level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
                     reportCaller: false # enable the caller report or not, value: true or false
 
-            - name  : Remove NodeJS Old version
+            - name  : Copy UPF default config file - (run mode)
+              shell: cp {{ UPF_DIR }}/config/upfcfg.yaml {{ NFS_DIR_CONFIG }}/upfcfg.yaml    
+
+            - name  : WebConsole - Remove NodeJS old version
               shell :  |
                     sudo apt-get purge --auto-remove nodejs -y
                     sudo apt-get purge nodejs -y
                     sudo apt-get autoremove
               
-            - name  : Install NodeJS 20.x
+            - name  : WebConsole - Install NodeJS 20.x
               shell :  |
                     sudo apt -y install curl dirmngr apt-transport-https lsb-release
                     curl -sL https://deb.nodesource.com/setup_20.x | sudo -E bash -
                     sudo apt -y install nodejs
            
-            - name  : Install Yarn
+            - name  : WebConsole - Install Yarn
               shell :  |
                     curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
                     echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
                     sudo apt update && sudo apt install yarn
 
-            - name  : Front End install with Yarn
-              shell : yarn install
+            - name  : WebConsole - Install @4.1.0 Version Config
+              shell :  |
+                    corepack enable
+                    corepack prepare yarn@4.1.0 --activate
+
+            - name  : WebConsole - Remove webuicfg.yaml default file config
+              shell : rm config/webuicfg.yaml
               args:
-                chdir: "{{ WEB_CONSOLE_FRONTEND_DIR }}"
+                chdir: "{{ WEB_CONSOLE_BASE_DIR }}"
+
+            - name  : Create WEBCONSOLE cert dir
+              shell : |
+                mkdir cert
+              args:
+                chdir: "{{ WEB_CONSOLE_BASE_DIR }}"
+
+            - name  : Copy CHF cert's to WebConsole 1/2
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/chf.pem {{ WEB_CONSOLE_BASE_DIR }}/cert/chf.pem
+
+            - name  : Copy CHF cert's to WebConsole 2/2
+              shell: cp {{ GO_SRC_DIR }}/{{ FREE5GC_CHECKOUT_FOLDER_NAME }}/cert/chf.key {{ WEB_CONSOLE_BASE_DIR }}/cert/chf.key
+
+            - name  : WebConsole - Build webuicfg.yaml config file
+              copy:
+                dest: "{{ WEB_CONSOLE_BASE_DIR }}/config/webuicfg.yaml"
+                content: |
+                  info:
+                    version: 1.0.3
+                    description: WebUI initial local configuration
+
+                  configuration:
+                    mongodb: # the mongodb connected by this webui
+                      name: free5gc # name of the mongodb
+                      url: {{ MONGO_URL_CONNECTION }} # a valid URL of the mongodb
+                    nrfUri: http://{{ NRF_IP_ADDRESS }}:{{ NRF_PORT }} # a valid URI of NRF
+                    webServer:
+                      scheme: http
+                      ipv4Address: 0.0.0.0
+                      port: {{ WEB_SERVER_PORT }}
+                    billingServer:
+                      enable: {{ BILLING_SERVER_ENABLE }}
+                      hostIPv4: {{ CHF_IP_BILLING_SERVER_FTP }}
+                      listenPort: {{ CHF_BILLING_SERVER_LISTEN_PORT }}
+                      portRange: # passive port range
+                        start: 2123
+                        end: 2130
+                      basePath: /tmp/webconsole
+                      port: {{ CHF_CGF_FTP_SERVER_LISTEN_PORT }} # CGF's FTP server port (not used for now)
+                      cert:
+                        pem: cert/chf.pem
+                        key: cert/chf.key
+
+                  logger: # log output setting
+                    enable: true # true or false
+                    level: info # how detailed to output, value: trace, debug, info, warn, error, fatal, panic
+                    reportCaller: false # enable the caller report or not, value: true or false
+                 
+
+            - name  : Remove not used config files 
+              shell: |
+                  rm n3iwfcfg.test.yaml
+                  rm n3iwfcfg.yaml
+                  rm upfcfg.test.yaml
+                  rm upfcfg.testulcl.yaml
+                  rm tngfcfg.yaml
+                  rm -rf multiAMF
+                  rm -rf multiUPF
+              args:
+                chdir: "{{ NFS_DIR_CONFIG }}"
+
+            - name  : Yarn Install - FrontEnd WebConsole
+              shell: |
+                  yarn install
+              args:
+                chdir: "{{ FRONT_END_BASE_DIR }}"               
+
+            - name  : Yarn Build - FrontEnd WebConsole
+              shell: |
+                  yarn build
+              args:
+                chdir: "{{ FRONT_END_BASE_DIR }}"                                
+
+            - name  : Yarn Config FrontEnd WebConsole
+              shell: |
+                  rm -rf ../public
+                  cp -R build ../public
+              args:
+                chdir: "{{ FRONT_END_BASE_DIR }}"                                                

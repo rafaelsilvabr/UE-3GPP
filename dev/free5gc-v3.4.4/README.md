@@ -62,24 +62,15 @@ ssh-copy-id -i ~/.ssh/id_ecdsa.pub root@<n3iwf-ip-address>
 ### Test Ansible Connection
 Now let's test the Ansible connection with the respective hosts configured in the previous steps. In the terminal, inside the ```UE-non3GPP/dev``` directory, run the following command:
 ```
-ansible -i ./dev/free5gc-v3.3.0/hosts -m ping all -u root
+ansible -i ./dev/free5gc-v3.4.4/hosts -m ping all -u root
 ```
 
 ### Go Install with Ansible
-The command below installs GO v.1.18.10 on each of VMs. The following description assumes running the command from the project root dir (UE-non3GPP).
+The command below installs GO v.1.21 on each of VMs. The following description assumes running the command from the project root dir (UE-non3GPP).
 
-#### Free5gc and N3IWF v3.3.0 - Go Version 1.18.10
+#### Free5gc, N3IWF v3.4.4 and UE-non3GPP - Go Version 1.21
 ```
-ansible-playbook dev/free5gc-v3.3.0/go-install-1.18.yaml -i dev/free5gc-v3.3.0/hosts
-```
-Now it is necessary to access each of the VMs and update bashrc
-```
-source ~/.bashrc
-```
-
-#### UE-non3GPP - Go Version 1.21
-```
-ansible-playbook dev/free5gc-v3.3.0/go-install-1.21.yaml -i dev/free5gc-v3.3.0/hosts
+ansible-playbook dev/free5gc-v3.4.4/go-install-1.21.yaml -i dev/free5gc-v3.4.4/hosts
 ```
 Now it is necessary to access each of the VMs and update bashrc
 ```
@@ -90,7 +81,7 @@ source ~/.bashrc
 Now let's run the script responsible for configuring free5gc (except the N3IWF network function) and a version of free5gc containing only the N3IWF network function. The following description assumes running the command from the project root dir (UE-non3GPP).
 #### Free5GC Setup
 ```
-ansible-playbook dev/free5gc-v3.3.0/free5gc-setup.yaml -i dev/free5gc-v3.3.0/hosts 
+ansible-playbook dev/free5gc-v3.4.4/free5gc-setup.yaml -i dev/free5gc-v3.4.4/hosts 
 ```
 #### N3IWF Setup
 ```
@@ -110,6 +101,16 @@ Using the first terminal connected to the VM where Free5gc was installed, go to 
 
 #### Init Free5GC API
 Using the second terminal, we will now initialize the API that provides access to MongoDB registration end-points. In the terminal, access the ```/root/go/src/free5gc/webconsole``` directory and then run the following command ```go run server.go```. After a few seconds, a Log message equivalent to this ```Listening and serving HTTP on :5000```.
+
+#### Init Free5GC WebConsole
+Into ```/root/go/src/free5gc/webconsole``` run:
+
+Acess webConsole
+```
+http://<<ip-addr-5gc>>:5000
+```
+user: admin
+pass: free5gc
 
 ### Init N3IWF
 Initializing N3WIF is similar to the process performed when initializing free5GC, however, only 1 terminal will be required. Access the VM where N3IWF was installed and navigate to the ```/root/go/src/free5gc/NFs/n3iwf``` directory. After accessing the directory, run the following command ```go run cmd/main.go```.  On the first run, some dependencies will be configured and after a few seconds a Log message similar to ```[INFO][N3IWF][Init] N3IWF running...``` will be displayed. It indicates that the N3IWF is ready and properly connecting to the previously initialized Free5gc.

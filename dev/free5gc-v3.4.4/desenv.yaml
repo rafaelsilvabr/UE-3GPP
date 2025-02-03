@@ -1,0 +1,98 @@
+---
+    -   hosts: fee5gc
+        become: yes
+        remote_user: root
+        vars:
+            GTP5G_DIR_INSTALL : "/root/gtp5g"
+            GTP5G_BRANCH_VERSION : "v0.8.3" 
+            FREE5GC_DIR_INSTALL : "/root/go/src/free5gc"
+            WEB_CONSOLE_FRONTEND_DIR : "/root/go/src/free5gc/webconsole/frontend"
+            WEB_CONSOLE_BASE_DIR : "/root/go/src/free5gc/webconsole"
+            NFS_DIR_CONFIG : "/root/go/src/free5gc/config"
+            UPF_DIR : "/root/go/src/free5gc/NFs/upf"
+            NRF_DIR : "/root/go/src/free5gc/NFs/nrf"
+            UDR_DIR : "/root/go/src/free5gc/NFs/udr"
+            UDM_DIR : "/root/go/src/free5gc/NFs/udm"
+            AUSF_DIR : "/root/go/src/free5gc/NFs/ausf"
+            NSSF_DIR : "/root/go/src/free5gc/NFs/nssf"
+            AMF_DIR : "/root/go/src/free5gc/NFs/amf"
+            PCF_DIR : "/root/go/src/free5gc/NFs/pcf"
+            SMF_DIR : "/root/go/src/free5gc/NFs/smf"
+            N3IWF_DIR : "/root/go/src/free5gc/NFs/n3iwf" 
+            GO_SRC_DIR : "/root/go/src"
+            HOME_DIR: "/root"
+            CLASSLESS_INTER_DOMAIN_ROUTING_IPV4_POOL_OF_UE : "60.60.0.0"
+            FREE5GC_GIT_CHECKOUT_URL_FREEGC_TAG_VERSION: "--recursive -b v3.4.4 -j `nproc` https://github.com/free5gc/free5gc.git"
+            LABORA_UE_NON3GPP_GIT_REPO: "https://github.com/LABORA-INF-UFG/UE-non3GPP.git"
+            FREE5GC_CHECKOUT_FOLDER_NAME: "free5gc"
+            PREDEFINED_IP_ADDRESS: "false"
+            MONGO_URL_CONNECTION: "mongodb://127.0.0.1:27017"
+            NRF_IP_ADDRESS: "127.0.0.10"
+            MASCARA_REDE_DECIMAL: "19"
+            NRF_PORT: "8000"
+            UDR_IP_ADDRESS: "127.0.0.4"
+            UDR_PORT: "8000"
+            UDM_IP_ADDRESS: "127.0.0.3"
+            UDM_PORT: "8000"
+            AUSF_IP_ADDRESS: "127.0.0.9"
+            AUSF_PORT: "8000"
+            NSSF_IP_ADDRESS: "127.0.0.31"
+            NSSF_PORT: "8000"
+            AMF_NGAP_IP_ADDRESS: "127.0.0.1"
+            AMF_IP_ADDRESS: "127.0.0.18"
+            AMF_PORT: "8000"
+            PCF_IP_ADDRESS: "127.0.0.7"
+            PCF_PORT: "8000"
+            SMF_N3_INTERFACE_IP_ADDRESS: "127.0.0.1"
+            SMF_N4_INTERFACE_IP_ADDRESS: "127.0.0.1"
+            SMF_IP_ADDRESS: "127.0.0.2"
+            SMF_PORT: "8000"
+            UPF_IP_ADDRESS: "127.0.0.8"
+            GTPU_UPF_IP_ADDRESS: "127.0.0.8"
+            AMF_SCTP_PORT: "38412"
+            MCC_1: "208"
+            MNC_1: "93"
+            MCC_2: "123"
+            MNC_2: "45"
+            
+        tasks:
+
+            - set_fact:
+                AMF_NGAP_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
+                SMF_N3_INTERFACE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
+                SMF_N4_INTERFACE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
+                GTPU_UPF_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
+              when: PREDEFINED_IP_ADDRESS == 'false'
+
+            - set_fact:
+                MASCARA_REDE_DECIMAL: "20"
+              when: ansible_default_ipv4.netmask == '255.255.240.0'
+
+            - set_fact:
+                MASCARA_REDE_DECIMAL: "24"
+              when: ansible_default_ipv4.netmask == '255.255.255.0'
+
+            - set_fact:
+                MASCARA_REDE_DECIMAL: "32"
+              when: ansible_default_ipv4.netmask == '255.255.255.255'
+
+            - name: Verify that required internet_network_interface variable are defined
+              fail:
+                msg: "Variable 'internet_network_interface' needs to be set for the role to work"
+              when: internet_network_interface is undefined
+
+            - name: "Ansible | Print a Variables"
+              debug:
+                  msg: "Network Mask: {{ MASCARA_REDE_DECIMAL }}"
+
+###--------------------------------------------
+###--------------------------------------------
+###--------------------------------------------            
+
+            - name  : Remove not used config files
+              shell: |
+                  rm -rf multiAMF
+                  rm -rf multiUPF
+              args:
+                chdir: "{{ NFS_DIR_CONFIG }}"
+                            

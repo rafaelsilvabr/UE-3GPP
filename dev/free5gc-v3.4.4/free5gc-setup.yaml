@@ -1564,3 +1564,13 @@
                   cp -R build ../public
               args:
                 chdir: "{{ FRONT_END_BASE_DIR }}"                                                
+
+
+            - name  : Run 'make' into FreeGC dir install
+              shell: |
+                  make
+              args:
+                chdir: "{{ FREE5GC_DIR_INSTALL }}"  
+
+
+                

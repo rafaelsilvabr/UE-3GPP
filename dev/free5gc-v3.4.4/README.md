@@ -85,12 +85,12 @@ ansible-playbook dev/free5gc-v3.4.4/free5gc-setup.yaml -i dev/free5gc-v3.4.4/hos
 ```
 #### N3IWF Setup
 ```
-ansible-playbook dev/free5gc-v3.3.0/n3iwf-setup.yaml -i dev/free5gc-v3.3.0/hosts
+ansible-playbook dev/free5gc-v3.4.4/n3iwf-setup.yaml -i dev/free5gc-v3.4.4/hosts
 ```
 
 ### Setup UE-non3GPP with Ansible
 ```
-ansible-playbook dev/UEnon3GPP-setup.yaml -i dev/free5gc-v3.3.0/hosts
+ansible-playbook dev/UEnon3GPP-setup.yaml -i dev/free5gc-v3.4.4/hosts
 ```
 
 ### Start Free5GC

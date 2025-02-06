@@ -1552,11 +1552,10 @@
               args:
                 chdir: "{{ FRONT_END_BASE_DIR }}"               
 
-            - name  : Yarn Build - FrontEnd WebConsole
-              shell: |
-                  yarn build
+            - name: Build Frontend with increased Node.js memory
+              shell: NODE_OPTIONS="--max-old-space-size=4096" yarn build > yarn_build.log 2>&1
               args:
-                chdir: "{{ FRONT_END_BASE_DIR }}"                                
+                chdir: "{{ FRONT_END_BASE_DIR }}"              
 
             - name  : Yarn Config FrontEnd WebConsole
               shell: |
@@ -1565,12 +1564,16 @@
               args:
                 chdir: "{{ FRONT_END_BASE_DIR }}"                                                
 
-
-            - name  : Run 'make' into FreeGC dir install
-              shell: |
-                  make
+            - name: Clean previous build
+              shell: make clean
               args:
-                chdir: "{{ FREE5GC_DIR_INSTALL }}"  
+                chdir: "{{ FREE5GC_DIR_INSTALL }}"              
 
-
+            - name: Run 'make' into FreeGC dir install
+              shell: make 
+              args:
+                chdir: "{{ FREE5GC_DIR_INSTALL }}"
+              environment:
+                PATH: "/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:{{ ansible_env.PATH }}"
+                GOPATH: "/root/go"
                 

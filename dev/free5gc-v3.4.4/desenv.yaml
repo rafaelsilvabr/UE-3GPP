@@ -4,11 +4,14 @@
         remote_user: root
         vars:
             GTP5G_DIR_INSTALL : "/root/gtp5g"
-            GTP5G_BRANCH_VERSION : "v0.8.3" 
+            GTP5G_BRANCH_VERSION : "v0.9.3" 
             FREE5GC_DIR_INSTALL : "/root/go/src/free5gc"
             WEB_CONSOLE_FRONTEND_DIR : "/root/go/src/free5gc/webconsole/frontend"
             WEB_CONSOLE_BASE_DIR : "/root/go/src/free5gc/webconsole"
+            FRONT_END_BASE_DIR : "/root/go/src/free5gc/webconsole/frontend"
             NFS_DIR_CONFIG : "/root/go/src/free5gc/config"
+            NEF_DIR : "/root/go/src/free5gc/NFs/nef"
+            CHF_DIR : "/root/go/src/free5gc/NFs/chf"
             UPF_DIR : "/root/go/src/free5gc/NFs/upf"
             NRF_DIR : "/root/go/src/free5gc/NFs/nrf"
             UDR_DIR : "/root/go/src/free5gc/NFs/udr"
@@ -30,6 +33,15 @@
             NRF_IP_ADDRESS: "127.0.0.10"
             MASCARA_REDE_DECIMAL: "19"
             NRF_PORT: "8000"
+            NEF_IP_ADDRESS: "127.0.0.5"
+            NEF_PORT: "8000"
+            CHF_IP_ADDRESS: "127.0.0.113"
+            CHF_PORT: "8000"
+            CHF_ABMF_DIAMETER_PORT: "3868"
+            CHF_RF_DIAMETER_PORT : "3869"
+            CHF_IP_BILLING_SERVER_FTP : "127.0.0.1"
+            CHF_BILLING_SERVER_LISTEN_PORT : "2021"
+            CHF_CGF_FTP_SERVER_LISTEN_PORT : "2022"
             UDR_IP_ADDRESS: "127.0.0.4"
             UDR_PORT: "8000"
             UDM_IP_ADDRESS: "127.0.0.3"
@@ -54,45 +66,28 @@
             MNC_1: "93"
             MCC_2: "123"
             MNC_2: "45"
+            WEB_SERVER_PORT : "5000"
+            BILLING_SERVER_ENABLE : "true"
             
         tasks:
 
-            - set_fact:
-                AMF_NGAP_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
-                SMF_N3_INTERFACE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
-                SMF_N4_INTERFACE_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
-                GTPU_UPF_IP_ADDRESS: "{{ ansible_default_ipv4.address }}"
-              when: PREDEFINED_IP_ADDRESS == 'false'
 
-            - set_fact:
-                MASCARA_REDE_DECIMAL: "20"
-              when: ansible_default_ipv4.netmask == '255.255.240.0'
 
-            - set_fact:
-                MASCARA_REDE_DECIMAL: "24"
-              when: ansible_default_ipv4.netmask == '255.255.255.0'
 
-            - set_fact:
-                MASCARA_REDE_DECIMAL: "32"
-              when: ansible_default_ipv4.netmask == '255.255.255.255'
-
-            - name: Verify that required internet_network_interface variable are defined
-              fail:
-                msg: "Variable 'internet_network_interface' needs to be set for the role to work"
-              when: internet_network_interface is undefined
-
-            - name: "Ansible | Print a Variables"
-              debug:
-                  msg: "Network Mask: {{ MASCARA_REDE_DECIMAL }}"
-
-###--------------------------------------------
-###--------------------------------------------
-###--------------------------------------------            
-
-            - name  : Remove not used config files
-              shell: |
-                  rm -rf multiAMF
-                  rm -rf multiUPF
+            - name: Clean previous build
+              shell: make clean
               args:
-                chdir: "{{ NFS_DIR_CONFIG }}"
-                            
+                chdir: "{{ FREE5GC_DIR_INSTALL }}"              
+
+            - name: Run 'make' into FreeGC dir install
+              shell: make 
+              args:
+                chdir: "{{ FREE5GC_DIR_INSTALL }}"
+              environment:
+                PATH: "/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:{{ ansible_env.PATH }}"
+                GOPATH: "/root/go"
+
+
+
+
+                

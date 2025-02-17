@@ -1,5 +1,11 @@
-# UE-non3GPP
-User Equipment for non-3GPP access via free5gc N3IWF V3.1.1
+# 📡 UE 3GPP - Configuração do Ambiente
+🚧 ATENÇÃO: Este repositório está em desenvolvimento! 🚧
+
+Este projeto ainda está em progresso e pode sofrer alterações.
+
+User Equipment 3GPP access via free5gc V3.4.4
+
+----
 
 ### Recommended Environment
 UE-non3GPP has been tested against the following environment:

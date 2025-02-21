@@ -1,7 +1,7 @@
 ---
-    -   hosts: labora-UE-non3GPP fee5gc n3iwf
+    -   hosts: ueransim-UE-3GPP fee5gc
         become: yes
-        remote_user: root
+        remote_user: {{ ansible_user }}
         vars:
             GO_VERSION: "1.21.3"
         tasks:

@@ -111,17 +111,79 @@ Run this from the **root directory** of the project (`UE-3GPP`).
 ```bash
 ansible-playbook dev/free5gc-v3.4.4/free5gc-install.yaml -i dev/hosts
 ```
-
 ---
 
-## 🔜 #TODO: Installing UERANSIM via Ansible Playbook
+## 📦 Installing UERANSIM via Ansible Playbook
 
 ```bash
-# ansible-playbook dev/free5gc-v3.4.4/ueransim-install.yaml -i dev/free5gc-v3.4.4/hosts
+ansible-playbook dev/ueransim/ueransim-install.yaml -i dev/hosts
 ```
 
 ---
 
+## 🌐 Configuring Network for Free5GC and UERANSIM
+After installing Free5GC and UERANSIM, it is necessary to configure the network to ensure that packets are forwarded correctly.
+
+### 1️⃣ Enable IPv4 Packet Forwarding
+Run the command below to ensure that Linux continues to forward packets between network interfaces:
+
+```bash
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
+```
+
+### 2️⃣ Identify the Network Interface
+Before configuring NAT, find out which network interface is being used for external connection (dn_interface):
+```bash
+ip a
+```
+On `Ubuntu Server 20.04 and 22.04`, the interfaces are usually `enp0s3` or `enp0s4`.
+
+### 3️⃣ Configure NAT and Allow Forwarding
+Once you have identified the correct interface, replace `<dn_interface>` in the commands below:
+
+```bash
+sudo iptables -t nat -A POSTROUTING -o <dn_interface> -j MASQUERADE
+sudo iptables -I FORWARD 1 -j ACCEPT
+```
+These commands allow packets from `Free5GC` and `UERANSIM` to pass correctly to the network.
+
+### 4️⃣ Make IPTables Rules Persistent
+To ensure that iptables rules are automatically applied after reboots, install the iptables-persistent package:
+```bash
+sudo apt install -y iptables-persistent
+```
+Save the rules so they are automatically loaded at boot:
+
+```bash
+sudo netfilter-persistent save
+sudo netfilter-persistent reload
+```
+
+### 5️⃣ 🔥 [Optional] Adjust or Disable UFW Firewall
+The UFW firewall may block connections from Free5GC if not configured correctly.
+
+If you have connection problems, add rules to release important ports:
+
+```bash
+sudo ufw allow 2152/udp
+sudo ufw allow 50051/tcp
+sudo ufw allow 8080/tcp
+sudo ufw allow 9876/udp
+```
+
+If you need to disable it temporarily for testing:
+
+```bash
+sudo systemctl stop ufw
+```
+To disable it permanently:
+```bash
+sudo systemctl disable ufw
+```
+**Note: Disable the firewall only if necessary! If everything works correctly, keep UFW active with the appropriate permissions.**
+
+---
 ## 🏁 Running Free5GC
 
 ### ▶️ Running Free5GC Core
@@ -140,20 +202,94 @@ cd ~/free5gc/webconsole
 sudo go run server.go
 ```
 
+#### 📌 Actions to be performed in the Free5GC WebConsole
+
+1️⃣ Access the WebConsole via a browser:
+
+🔗 `http://<FREE5GC_IP>:5000`
+(Replace `<FREE5GC_IP>` with the correct Free5GC server IP)
+
+2️⃣ Log in:
+
+Username: `admin`, Password: `free5gc`
+
+3️⃣ Navigate to the Subscribers section:
+
+In the left sidebar menu, click on `Subscribers`.
+
+4️⃣ Create a new UE:
+
+Click the `New Subscriber` button.
+
+5️⃣ Adjust the Operator Code Type:
+
+Scroll down to `Operator Code Type`.
+Change "OPc" to "OP".
+
+6️⃣ Finalize the registration:
+
+Leave all other fields unchanged.
+Scroll to the bottom of the page and click `Submit`.
+
+Now the UE is successfully registered in Free5GC! 
+
 ---
 
-## 🔜 #TODO: Running UERANSIM
+## 🚀 Running UERANSIM
 
-### ▶️ TODO: Running gNB
+### ▶️ Running gNB
 
-// Run the **gNB**
+On the `labora-UE-3GPP` host, run the following command to start the gNB:
 
-### ▶️ TODO: Running UE
+```bash
+cd ~/ueransim
+./build/nr-gnb -c config/free5gc-gnb.yaml
+```
+- This starts the gNB and establishes the N2 (NGAP) and N3 (GTP-U) connections with Free5GC.
+- Ensure the AMF is running on Free5GC before starting gNB.
 
-// Run the **UE**
+### ▶️ Running UE
+
+On the `labora-UE-3GPP` host, run the following command to start the UE simulation:
+
+```bash
+cd ~/ueransim
+./build/nr-ue -c config/free5gc-ue.yaml
+```
+- This starts the UE and attempts to register with the Free5GC core.
+- The UE should establish PDU sessions and get an IP address from the Free5GC network.
 
 ---
 
-## 🔜 TODO: Testing the Connection
+## ✅ Testing Data Connectivity
 
-// Commands to test routing and deregistration commands  
+### 1️⃣ Check UE's assigned IP
+```bash
+ifconfig
+```
+- Look for the `uesimtun0` interface. If it exists, the UE is connected.
+### 2️⃣ Ping Free5GC from UE
+```bash
+ping -I uesimtun0 60.60.0.1
+```
+- This tests if the UE can communicate with the Free5GC UPF.
+### 3️⃣ Ping the Internet from UE
+```bash
+ping -I uesimtun0 google.com
+```
+- If the Free5GC core is properly forwarding traffic, you should get replies.
+
+### 4️⃣ Traceroute to Google from UE
+```bash
+traceroute -i uesimtun0 google.com
+```
+
+### ❌ Test Deregistering UE
+To manually deregister the UE from Free5GC:
+
+```bash
+sudo ./build/nr-cli imsi-208930000000001 --exec "deregister normal"
+```
+- This forces the UE to disconnect from the 5G network.
+
+---

@@ -35,7 +35,7 @@ sudo apt update && sudo apt -y install python git ansible net-tools
 Clone the project using the following command:
 
 ```bash
-git clone https://github.com/rafaelsilvabr/UE-3GPP.git
+git clone https://github.com/LABORA-INF-UFG/UE-3GPP
 ```
 
 After cloning the project, you need to **edit the `hosts` file**, located at:  

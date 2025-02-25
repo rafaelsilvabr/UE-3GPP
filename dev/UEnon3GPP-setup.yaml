@@ -22,6 +22,7 @@
             MASCARA_REDE_DECIMAL: "19"
             GO_SRC_DIR : "/root/go/src"
             UE_NON3GPP_PORT_UDP_CONNECTION: "500"
+            BRANCH: "feature/migrate-to-free5gc-3.4.4"
             LABORA_UE_NON3GPP_GIT_REPO: "https://github.com/LABORA-INF-UFG/UE-non3GPP.git"
         tasks:
             - set_fact:
@@ -58,7 +59,7 @@
               ignore_errors: true
 
             - name  : Git Clone UE-non3GPP
-              shell : git clone {{ LABORA_UE_NON3GPP_GIT_REPO }} {{ UE_NON3GPP_DIR_INSTALL  }}
+              shell : git clone --depth 1 --branch {{ BRANCH }} {{ LABORA_UE_NON3GPP_GIT_REPO }} {{ UE_NON3GPP_DIR_INSTALL  }}
               args:
                 chdir: "{{ GO_SRC_DIR }}"
 

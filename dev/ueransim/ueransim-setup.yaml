@@ -1,0 +1,55 @@
+---
+- name: Install and Configure UERANSIM
+  hosts: ueransim_UE_3GPP
+  remote_user: "{{ ansible_user }}"
+  become: yes
+  vars:
+    ueransim_dir: "/home/{{ ansible_user }}/UERANSIM2"
+    free5gc_ip: "{{ free5gc_ip_address }}"
+    ueransim_ip: "{{ inventory_hostname }}"
+
+  tasks:
+
+    - name: Update and upgrade the system
+      apt:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Install required dependencies
+      apt:
+        name:
+          - make
+          - g++
+          - libsctp-dev
+          - lksctp-tools
+          - iproute2
+        state: present
+
+    - name: Install CMake via Snap
+      command: snap install cmake --classic
+
+    - name: Remove existing UERANSIM repository (if exists)
+      file:
+        path: "{{ ueransim_dir }}"
+        state: absent
+
+    - name: Clone UERANSIM repository
+      git:
+        repo: "https://github.com/aligungr/UERANSIM"
+        dest: "{{ ueransim_dir }}"
+        version: "85a0fbf" # Fix EAP-AKA-PRIME for Free5GC v3.4.x
+
+    - name: Build UERANSIM
+      command: make
+      args:
+        chdir: "{{ ueransim_dir }}"
+
+    - name: Configure UERANSIM gNB
+      template:
+        src: "free5gc-gnb.yaml.j2"
+        dest: "{{ ueransim_dir }}/config/free5gc-gnb.yaml"
+
+    - name: Configure UERANSIM UE
+      template:
+        src: "free5gc-ue.yaml.j2"
+        dest: "{{ ueransim_dir }}/config/free5gc-ue.yaml"

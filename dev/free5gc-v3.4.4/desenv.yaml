@@ -1,0 +1,93 @@
+---
+    -   hosts: fee5gc
+        become: yes
+        remote_user: root
+        vars:
+            GTP5G_DIR_INSTALL : "/root/gtp5g"
+            GTP5G_BRANCH_VERSION : "v0.9.3" 
+            FREE5GC_DIR_INSTALL : "/root/go/src/free5gc"
+            WEB_CONSOLE_FRONTEND_DIR : "/root/go/src/free5gc/webconsole/frontend"
+            WEB_CONSOLE_BASE_DIR : "/root/go/src/free5gc/webconsole"
+            FRONT_END_BASE_DIR : "/root/go/src/free5gc/webconsole/frontend"
+            NFS_DIR_CONFIG : "/root/go/src/free5gc/config"
+            NEF_DIR : "/root/go/src/free5gc/NFs/nef"
+            CHF_DIR : "/root/go/src/free5gc/NFs/chf"
+            UPF_DIR : "/root/go/src/free5gc/NFs/upf"
+            NRF_DIR : "/root/go/src/free5gc/NFs/nrf"
+            UDR_DIR : "/root/go/src/free5gc/NFs/udr"
+            UDM_DIR : "/root/go/src/free5gc/NFs/udm"
+            AUSF_DIR : "/root/go/src/free5gc/NFs/ausf"
+            NSSF_DIR : "/root/go/src/free5gc/NFs/nssf"
+            AMF_DIR : "/root/go/src/free5gc/NFs/amf"
+            PCF_DIR : "/root/go/src/free5gc/NFs/pcf"
+            SMF_DIR : "/root/go/src/free5gc/NFs/smf"
+            N3IWF_DIR : "/root/go/src/free5gc/NFs/n3iwf" 
+            GO_SRC_DIR : "/root/go/src"
+            HOME_DIR: "/root"
+            CLASSLESS_INTER_DOMAIN_ROUTING_IPV4_POOL_OF_UE : "60.60.0.0"
+            FREE5GC_GIT_CHECKOUT_URL_FREEGC_TAG_VERSION: "--recursive -b v3.4.4 -j `nproc` https://github.com/free5gc/free5gc.git"
+            LABORA_UE_NON3GPP_GIT_REPO: "https://github.com/LABORA-INF-UFG/UE-non3GPP.git"
+            FREE5GC_CHECKOUT_FOLDER_NAME: "free5gc"
+            PREDEFINED_IP_ADDRESS: "false"
+            MONGO_URL_CONNECTION: "mongodb://127.0.0.1:27017"
+            NRF_IP_ADDRESS: "127.0.0.10"
+            MASCARA_REDE_DECIMAL: "19"
+            NRF_PORT: "8000"
+            NEF_IP_ADDRESS: "127.0.0.5"
+            NEF_PORT: "8000"
+            CHF_IP_ADDRESS: "127.0.0.113"
+            CHF_PORT: "8000"
+            CHF_ABMF_DIAMETER_PORT: "3868"
+            CHF_RF_DIAMETER_PORT : "3869"
+            CHF_IP_BILLING_SERVER_FTP : "127.0.0.1"
+            CHF_BILLING_SERVER_LISTEN_PORT : "2021"
+            CHF_CGF_FTP_SERVER_LISTEN_PORT : "2022"
+            UDR_IP_ADDRESS: "127.0.0.4"
+            UDR_PORT: "8000"
+            UDM_IP_ADDRESS: "127.0.0.3"
+            UDM_PORT: "8000"
+            AUSF_IP_ADDRESS: "127.0.0.9"
+            AUSF_PORT: "8000"
+            NSSF_IP_ADDRESS: "127.0.0.31"
+            NSSF_PORT: "8000"
+            AMF_NGAP_IP_ADDRESS: "127.0.0.1"
+            AMF_IP_ADDRESS: "127.0.0.18"
+            AMF_PORT: "8000"
+            PCF_IP_ADDRESS: "127.0.0.7"
+            PCF_PORT: "8000"
+            SMF_N3_INTERFACE_IP_ADDRESS: "127.0.0.1"
+            SMF_N4_INTERFACE_IP_ADDRESS: "127.0.0.1"
+            SMF_IP_ADDRESS: "127.0.0.2"
+            SMF_PORT: "8000"
+            UPF_IP_ADDRESS: "127.0.0.8"
+            GTPU_UPF_IP_ADDRESS: "127.0.0.8"
+            AMF_SCTP_PORT: "38412"
+            MCC_1: "208"
+            MNC_1: "93"
+            MCC_2: "123"
+            MNC_2: "45"
+            WEB_SERVER_PORT : "5000"
+            BILLING_SERVER_ENABLE : "true"
+            
+        tasks:
+
+
+
+
+            - name: Clean previous build
+              shell: make clean
+              args:
+                chdir: "{{ FREE5GC_DIR_INSTALL }}"              
+
+            - name: Run 'make' into FreeGC dir install
+              shell: make 
+              args:
+                chdir: "{{ FREE5GC_DIR_INSTALL }}"
+              environment:
+                PATH: "/usr/local/go/bin:/usr/bin:/bin:/usr/sbin:/sbin:{{ ansible_env.PATH }}"
+                GOPATH: "/root/go"
+
+
+
+
+                

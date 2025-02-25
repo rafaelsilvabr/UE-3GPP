@@ -1,7 +1,7 @@
 ---
-    -   hosts: fee5gc
+    -   hosts: free5gc_5GCORE
         become: yes
-        remote_user: root
+        remote_user: "{{ ansible_user }}"
         vars:
             GTP5G_DIR_INSTALL : "/root/gtp5g"
             GTP5G_BRANCH_VERSION : "v0.9.3" 

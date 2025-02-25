@@ -1,0 +1,20 @@
+mcc: '208'          # Mobile Country Code value
+mnc: '93'           # Mobile Network Code value (2 or 3 digits)
+
+nci: '0x000000010'  # NR Cell Identity (36-bit)
+idLength: 32
+tac: 1
+
+linkIp: 127.0.0.1
+ngapIp: {{ ueransim_ip }}
+gtpIp: {{ ueransim_ip }}
+
+amfConfigs:
+  - address: {{ free5gc_ip }}
+    port: 38412
+
+slices:
+  - sst: 0x1
+    sd: 0x010203
+
+ignoreStreamIds: true

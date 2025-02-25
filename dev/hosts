@@ -1,5 +1,5 @@
-[fee5gc-5GCORE]
+[free5gc_5GCORE]
 <ip-host-5GCore> internet_network_interface=eth0  nwdaf_install=false ansible_user=ansible
 
-[ueransim-UE-3GPP]
-<ip-ue-3gpp> free5gc_ip_address=<ip-host-5GCore> ansible_user=ansible
+[ueransim_UE_3GPP]
+<ip-host-ueransim> free5gc_ip_address=<ip-host-5GCore> ansible_user=ansible

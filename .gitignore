@@ -16,3 +16,11 @@
 # Dependency directories (remove the comment below to include it)
 vendor/
 /pkg/metrics/ue-metrics.txt
+
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.terraform.lock.hcl
+*.pem
+

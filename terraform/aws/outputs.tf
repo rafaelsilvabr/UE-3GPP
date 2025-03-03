@@ -13,3 +13,7 @@ output "instance_private_ips" {
 output "instance_public_ips" {
   value = module.compute.instance_public_ips
 }
+
+output "instance_public_dns" {
+  value = module.compute.instance_public_dns
+}

@@ -87,7 +87,7 @@ ssh-copy-id -i ~/.ssh/id_ecdsa.pub ansible@<ip-ue-3gpp>
 
 To test the connection with the hosts, run the following command:  
 ```bash
-ansible -i ./dev/free5gc-v3.4.4/hosts -m ping all -u ansible
+ansible -i ./dev/hosts -m ping all -u ansible
 ```
 
 ---

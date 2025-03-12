@@ -6,7 +6,7 @@
       vars:
         ueransim_dir: "/home/{{ ansible_user }}/UERANSIM"
         free5gc_ip: "{{ free5gc_ip_address }}"
-        ueransim_ip: "{{ inventory_hostname }}"
+        ueransim_ip: "{{ ueransim_ip_address }}"
 
       tasks:
 

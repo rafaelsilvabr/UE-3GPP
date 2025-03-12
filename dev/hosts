@@ -2,4 +2,4 @@
 <public-ip-host-5GCore> internet_network_interface=eth0  nwdaf_install=false ansible_user=ansible
 
 [ueransim_UE_3GPP]
-<public-ip-host-UERANSIM> ueransim_ip_address=<private-ip-host-UERANSIM> free5gc_ip_address=<public-ip-host-5GCore> ansible_user=ansible
+<public-ip-host-UERANSIM> ueransim_ip_address=<private-ip-host-UERANSIM> free5gc_ip_address=<private-ip-host-5GCore> ansible_user=ansible

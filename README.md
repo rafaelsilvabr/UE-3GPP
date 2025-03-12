@@ -54,11 +54,11 @@ Let's start by configuring the host responsible for running **fee5gc-core**.
 Edit the `hosts` file and replace `<ip-host-5GCore>` and `<ip-ue-3gpp>` with the **IP addresses** of the machines where **fee5gc-core** and **UE-3GPP** will be configured, respectively.
 
 ```yaml
-[fee5gc-5GCORE]
-<ip-host-5GCore> internet_network_interface=eth0  nwdaf_install=false ansible_user=ansible
+[free5gc_5GCORE]
+<public-ip-host-5GCore> internet_network_interface=eth0  nwdaf_install=false ansible_user=ansible
 
-[ueransim-UE-3GPP]
-<ip-ue-3gpp> free5gc_ip_address=<ip-host-5GCore> ansible_user=ansible
+[ueransim_UE_3GPP]
+<public-ip-host-UERANSIM> ueransim_ip_address=<private-ip-host-UERANSIM> free5gc_ip_address=<private-ip-host-5GCore> ansible_user=ansible
 ```
 
 **Note:** Create a user named `ansible` on the machines and add it to the `sudo` group.

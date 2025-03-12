@@ -3,7 +3,7 @@ data "aws_ami" "ubuntu" {
 
   filter {
     name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+    values = ["ubuntu/images/hvm-ssd/ubuntu-focal-20.04-amd64-server-*"]
   }
 
   filter {
@@ -17,6 +17,13 @@ data "aws_ami" "ubuntu" {
 resource "aws_security_group" "allow_ssh" {
   vpc_id = var.vpc_id
 
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   ingress {
     from_port   = 22
     to_port     = 22
@@ -24,11 +31,16 @@ resource "aws_security_group" "allow_ssh" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+  ingress {
     cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 5000
+    protocol    = "tcp"
+    to_port     = 5000
+  }
+
+  ingress {
+    protocol = "-1"
+    self     = true
   }
 
   tags = {
@@ -38,7 +50,7 @@ resource "aws_security_group" "allow_ssh" {
 
 resource "aws_instance" "app" {
   ami                    = data.aws_ami.ubuntu.id
-  instance_type          = "t3.micro"
+  instance_type          = "t3.small"
   count                  = 2
   subnet_id              = var.subnet_id
   vpc_security_group_ids = [aws_security_group.allow_ssh.id]

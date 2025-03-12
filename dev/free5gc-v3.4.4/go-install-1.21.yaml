@@ -1,7 +1,7 @@
 ---
-    -   hosts: ueransim-UE-3GPP fee5gc
+    -   hosts: all
         become: yes
-        remote_user: {{ ansible_user }}
+        remote_user: "{{ ansible_user }}"
         vars:
             GO_VERSION: "1.21.3"
         tasks:
